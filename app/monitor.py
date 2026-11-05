@@ -14,6 +14,8 @@ def evaluate(ns, delay_threshold_s):
     reasons = []
     if ns.status and any(w in ns.status for w in ERROR_WORDS):
         reasons.append(f"status={ns.status}")
+    elif ns.alive is False:
+        reasons.append("alive=false")
     # Streams sob demanda (static=False) legitimamente ficam sem bitrate.
     if ns.static is not False and (ns.bitrate is None or ns.bitrate == 0):
         reasons.append("bitrate zero/ausente")

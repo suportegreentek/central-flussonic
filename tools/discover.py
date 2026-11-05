@@ -10,11 +10,35 @@ import argparse, json, os, re, sys
 import httpx
 
 CANDIDATES = [
+    "/streamer/api/v3/schema",  # OpenAPI do PRÓPRIO servidor: a fonte da verdade por versão
     "/streamer/api/v3/streams?limit=5", "/streamer/api/v3/config", "/streamer/api/v3/config/stats",
     "/streamer/api/v3/monitoring/readiness", "/streamer/api/v2/streams", "/streamer/api/v1/streams",
     "/flussonic/api/media", "/flussonic/api/server", "/flussonic/api/config", "/flussonic/api/sessions",
     "/flussonic/api/stats",
 ]
+
+
+def analyze_schema(sch):
+    """Mostra os endpoints de streams (inclui o de restart, se houver) e os campos de stats com descrição."""
+    print("\n== OpenAPI do servidor ==")
+    print("versão da API:", sch.get("info", {}).get("version"))
+    for path, ops in sorted(sch.get("paths", {}).items()):
+        if "stream" in path and "dvr" not in path:
+            for m, op in ops.items():
+                if isinstance(op, dict):
+                    print(f"  {m.upper():6} {path}  [{op.get('operationId', '')}]")
+    for name, comp in sch.get("components", {}).get("schemas", {}).items():
+        props = comp.get("properties", {}) if isinstance(comp, dict) else {}
+        if name.endswith("stream_stats") or {"ts_delay", "alive", "bitrate"} <= set(props):
+            print(f"\n  campos de {name}:")
+            for k in sorted(props):
+                if k in ("alive", "running", "status", "bitrate", "input_bitrate", "ts_delay", "delay", "lag",
+                         "opened_at", "start_running_at", "lifetime", "retry_count", "input_error_rate",
+                         "source_id", "url", "media_info", "last_dts", "last_dts_at"):
+                    d = props[k]
+                    desc = (d.get("description") or "").replace("\n", " ")[:110]
+                    print(f"    {k:18} {d.get('type', d.get('$ref', ''))!s:10} {d.get('x-api-unit', d.get('format', ''))} {desc}")
+    print()
 
 
 def main():
@@ -59,6 +83,8 @@ def main():
         summary[p] = r.status_code
         if r.status_code == 401:
             print("   -> autenticação recusada; confira usuário/senha ou método (Basic vs token)")
+        if p == "/streamer/api/v3/schema" and r.status_code == 200 and isinstance(j, dict):
+            analyze_schema(j)
     json.dump(summary, open(os.path.join(a.out, "_summary.json"), "w"), indent=2)
     print(f"\nRespostas brutas salvas em {a.out}/ — revise antes de compartilhar (podem conter URLs de origem/tokens).")
 

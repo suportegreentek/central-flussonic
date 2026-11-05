@@ -51,9 +51,20 @@ def test_evaluate():
 
 
 def test_normalize_v3():
-    raw = {"name": "a", "stats": {"status": "running", "input_bitrate": 100, "lag_ms": 5000, "opened_at": 1700000000000}}
+    raw = {"name": "a", "stats": {"status": "running", "bitrate": 100, "ts_delay": 5000, "opened_at": 1700000000000}}
     n = normalize(raw, PROFILES["v3"], now=1700000100)
     assert (n.status, n.bitrate, n.lag_s, round(n.uptime_s)) == ("running", 100.0, 5.0, 100)
+
+
+def test_normalize_manual_example():
+    # exemplo literal do manual (GET /streamer/api/v3/streams/ort), sem stats.status
+    raw = {"effective": {"name": "ort", "static": True}, "name": "ort", "static": True,
+           "stats": {"alive": False, "opened_at": 1632202350648, "retry_count": 19, "running": True}}
+    n = normalize(raw, PROFILES["v3"], now=1632202450.648)
+    assert (n.status, n.alive, n.static, n.bitrate, round(n.uptime_s)) == ("error", False, True, None, 100)
+    assert evaluate(n, 60)
+    n2 = normalize({"name": "a", "stats": {"alive": True, "bitrate": 3000, "ts_delay": 14400000}}, PROFILES["v3"])
+    assert n2.lag_s == 14400 and evaluate(n2, 60) == ["atraso 14400s > 60s"]
 
 
 def test_persistence_then_restart_with_snapshot():

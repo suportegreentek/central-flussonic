@@ -3,8 +3,8 @@
 Painel web que monitora vários servidores Flussonic (um por hotel) pela API HTTP, detecta streams travados
 (`error` com fonte online), salva **evidência (JSON bruto)** e reinicia automaticamente com limites.
 
-> ⚠️ **Antes de usar em produção:** os endpoints/campos da API por versão (21.10 / 23.01) ainda são hipóteses.
-> Faça a descoberta: [docs/DISCOVERY.md](docs/DISCOVERY.md). Até lá, o botão "Testar" do servidor mostra se o perfil funciona.
+> ⚠️ **Antes de usar em produção:** autenticação, listagem e campos principais foram confirmados no manual oficial
+> (versão atual). O **endpoint de restart** e o comportamento do **21.10** ainda precisam de confirmação. Veja [docs/DISCOVERY.md](docs/DISCOVERY.md).
 
 ## Instalação (Docker)
 ```bash
@@ -23,12 +23,13 @@ Abra http://SERVIDOR:8000 (usuário `admin`). Dados em `./data` (SQLite + `secre
 - Horários: gravados em UTC, exibidos em America/Sao_Paulo.
 
 ## Adicionar servidores
-Aba **Servidores** → nome, URL base (`http://ip:8080`), autenticação, hotel/cidade → **Testar** (somente leitura) →
+Aba **Servidores** → nome, URL base (`http://ip:8080`), autenticação (HTTP Basic; para o reinício funcionar use o
+usuário de **`edit_auth`**, porque `view_auth` só permite leitura), hotel/cidade → **Testar** (somente leitura) →
 marque "reinício automático" se desejado. O padrão é *desligado*. Por stream, a visão geral permite herdar / ligar / desligar.
 
 ## Como funciona
 1. A cada intervalo, cada servidor é consultado em paralelo (limite de concorrência, timeout). Servidor fora = "offline"; não afeta os demais.
-2. Problema = status com erro, bitrate 0/ausente (ignorado se o stream é `static:false`) ou atraso > limite.
+2. Problema = status com erro / `stats.alive=false`, bitrate 0/ausente (ignorado se o stream é `static:false`) ou atraso > limite.
 3. Após N verificações seguidas: evento `problem` + notificação. Com auto-restart ligado: snapshot → restart (único write) → evento.
 4. Respeita intervalo mínimo e limite por janela; ao estourar, evento **critical** `restart_limit` e para de tentar naquele stream até se recuperar.
 5. Após `verify_after_s`, registra `restart_ok` ou `restart_failed`.

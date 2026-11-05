@@ -35,13 +35,16 @@ async def auth(request: Request, call_next):
 
 def render(name, s):
     st = s["state"]
-    stats = {"status": "running", "input_bitrate": 2500, "bitrate": 2500, "lag_ms": 0, "opened_at": int(s["opened"] * 1000)}
-    if st == "error":
-        stats.update(status="error", input_bitrate=0, bitrate=0, lag_ms=4 * 3600 * 1000)
-    elif st == "lag":
-        stats.update(lag_ms=4 * 3600 * 1000)
+    # campos conforme o exemplo do manual (stats.alive, opened_at em ms, retry_count...) + bitrate/ts_delay
+    stats = {"alive": True, "running": True, "bitrate": 2500, "ts_delay": 200, "retry_count": 0,
+             "input_error_rate": 0, "opened_at": int(s["opened"] * 1000), "start_running_at": int(s["opened"] * 1000)}
+    if st == "error":   # processo vivo (uptime alto), sem dados e com atraso de 4h
+        stats.update(alive=False, ts_delay=4 * 3600 * 1000)
+        stats.pop("bitrate")
+    elif st == "lag":   # hipótese: dados chegando, timestamps atrasados
+        stats.update(ts_delay=4 * 3600 * 1000)
     elif st == "zero":
-        stats.update(input_bitrate=0, bitrate=0)
+        stats.update(bitrate=0)
     return {"name": name, "static": True, "stats": stats, "inputs": [{"url": "m4s://gs1.example/x"}, {"url": "m4s://gs2.example/x"}]}
 
 

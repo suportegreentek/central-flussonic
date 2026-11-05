@@ -1,8 +1,7 @@
 """Camada de adaptação da API do Flussonic.
 
-IMPORTANTE: os perfis abaixo (caminhos e nomes de campos) são CANDIDATOS. Não foram
-confirmados contra servidores reais 21.10/23.01 — rode `tools/discover.py` e ajuste
-os perfis em `profiles.py` conforme o resultado (veja docs/DISCOVERY.md).
+Os perfis (caminhos/campos) ficam em `profiles.py`, marcados como confirmados pelo manual
+ou hipóteses. Confirme por versão com `tools/discover.py` (veja docs/DISCOVERY.md).
 """
 import time
 from dataclasses import dataclass, field
@@ -26,6 +25,7 @@ class NormStream:
     lag_s: Optional[float]        # atraso em segundos
     uptime_s: Optional[float]
     static: Optional[bool]
+    alive: Optional[bool] = None
     raw: dict = field(default_factory=dict)
 
 
@@ -43,8 +43,9 @@ def normalize(raw: dict, prof: dict, now: Optional[float] = None) -> NormStream:
     status, _ = _first(stats, prof["status_keys"])
     if status is None:
         status, _ = _first(raw, prof["status_keys"])
-    if status is None and "alive" in stats:
-        status = "running" if stats["alive"] else "error"
+    alive = stats.get("alive") if isinstance(stats.get("alive"), bool) else None
+    if status is None and alive is not None:  # [C] stats.alive existe; não há stats.status no manual
+        status = "running" if alive else "error"
     bitrate, _ = _first(stats, prof["bitrate_keys"])
     if bitrate is None:
         bitrate, _ = _first(raw, prof["bitrate_keys"])
@@ -60,9 +61,11 @@ def normalize(raw: dict, prof: dict, now: Optional[float] = None) -> NormStream:
         opened = opened / 1000 if opened > 1e11 else opened  # ms -> s
         uptime = max(0.0, now - opened)
     static = raw.get("static")
+    if not isinstance(static, bool) and isinstance(raw.get("effective"), dict):
+        static = raw["effective"].get("static")
     return NormStream(name=name, status=str(status).lower() if status is not None else None,
                       bitrate=float(bitrate) if isinstance(bitrate, (int, float)) else None,
-                      lag_s=lag, uptime_s=uptime, static=static if isinstance(static, bool) else None, raw=raw)
+                      lag_s=lag, uptime_s=uptime, static=static if isinstance(static, bool) else None, alive=alive, raw=raw)
 
 
 class Adapter:
