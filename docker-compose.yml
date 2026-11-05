@@ -1,0 +1,10 @@
+services:
+  central:
+    build: .
+    restart: unless-stopped        # volta sozinho após reinício do host/processo
+    ports: ["8000:8000"]
+    volumes: ["./data:/data"]
+    environment:
+      CENTRAL_ADMIN_USER: ${CENTRAL_ADMIN_USER:-admin}
+      CENTRAL_ADMIN_PASSWORD: ${CENTRAL_ADMIN_PASSWORD:?defina CENTRAL_ADMIN_PASSWORD}
+      CENTRAL_SECRET_KEY: ${CENTRAL_SECRET_KEY:-}   # opcional; senão é gerada em ./data/secret.key

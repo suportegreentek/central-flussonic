@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Central Flussonic</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#1c2330;--card:#fff;--bd:#d9dde5;--ok:#177a3c;--bad:#b3261e;--warn:#b26a00;--mut:#6b7385}
+@media(prefers-color-scheme:dark){:root{--bg:#12151b;--fg:#e6e9ef;--card:#1b2029;--bd:#2c3340;--ok:#4cc27a;--bad:#ff6b61;--warn:#e5a23a;--mut:#9aa3b5}}
+body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+header{display:flex;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--bd);flex-wrap:wrap}
+header h1{font-size:16px;margin:0 12px 0 0}
+nav button{background:none;border:0;color:var(--fg);padding:6px 10px;cursor:pointer;border-radius:6px}
+nav button.on{background:var(--card);border:1px solid var(--bd)}
+main{padding:16px;max-width:1200px;margin:auto}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:12px;overflow-x:auto}
+table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}
+tr.prob td{background:color-mix(in srgb,var(--bad) 14%,transparent)}
+.tag{padding:1px 7px;border-radius:10px;border:1px solid var(--bd);font-size:12px}
+.online,.restart_ok,.recovered,.info{color:var(--ok)}.offline,.critical{color:var(--bad);font-weight:600}.warning{color:var(--warn)}
+input,select,button.a{font:inherit;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--card);color:var(--fg)}
+button.a{cursor:pointer}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}.mut{color:var(--mut)}
+pre{max-height:300px;overflow:auto;background:var(--bg);padding:8px;border-radius:6px}
+</style></head><body>
+<header><h1>Central Flussonic</h1><nav id="nav"></nav><span class="mut" id="stamp"></span></header>
+<main id="main"></main>
+<script>
+const TZ='America/Sao_Paulo', $=s=>document.querySelector(s);
+const fmt=t=>t?new Date(t).toLocaleString('pt-BR',{timeZone:TZ}):'-';
+const dur=s=>s==null?'-':s<60?Math.round(s)+'s':s<3600?Math.round(s/60)+'min':s<86400?(s/3600).toFixed(1)+'h':Math.floor(s/86400)+'d '+Math.floor(s%86400/3600)+'h';
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(p,o={}){const r=await fetch('/api'+p,{headers:{'Content-Type':'application/json'},...o,body:o.body&&JSON.stringify(o.body)});
+ if(!r.ok){alert('Erro: '+(await r.text()));throw 0}return r.status==204?null:r.json()}
+const tabs={overview:'Visão geral',servers:'Servidores',events:'Eventos',snaps:'Evidências',settings:'Configurações'};
+let cur='overview',timer;
+$('#nav').innerHTML=Object.entries(tabs).map(([k,v])=>`<button data-k="${k}">${v}</button>`).join('');
+$('#nav').onclick=e=>{if(e.target.dataset.k){cur=e.target.dataset.k;go()}};
+async function go(){clearInterval(timer);[...$('#nav').children].forEach(b=>b.classList.toggle('on',b.dataset.k==cur));
+ await views[cur]();if(cur=='overview')timer=setInterval(views.overview,15000)}
+const f={srv:'',state:'',prob:false};
+const views={
+async overview(){const d=await api(`/overview?only_problems=${f.prob}${f.srv?'&server_id='+f.srv:''}${f.state?'&state='+encodeURIComponent(f.state):''}`);
+ const all=await api('/servers');const bad=d.reduce((n,s)=>n+s.streams.filter(x=>x.problem).length,0);
+ $('#stamp').textContent='Atualizado '+fmt(new Date());
+ $('#main').innerHTML=`<div class="row"><select id="fs"><option value="">Todos os servidores</option>${all.map(s=>`<option value="${s.id}" ${f.srv==s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
+ <input id="fst" placeholder="estado (ex.: error)" value="${esc(f.state)}"><label><input type="checkbox" id="fp" ${f.prob?'checked':''}> só com problema</label>
+ <b class="${bad?'critical':'online'}">${bad} stream(s) com problema</b></div>`+d.map(s=>`<div class="card"><b>${esc(s.name)}</b>
+ <span class="tag ${s.status}">${s.status}</span> <span class="mut">${esc(Object.values(s.tags).join(' · '))} v${esc(s.version||'?')} ${s.adapter_used?'['+s.adapter_used+']':''} ${s.status=='offline'?esc(s.last_error||''):''}</span>
+ <table><tr><th>Stream</th><th>Status</th><th>Bitrate</th><th>Atraso</th><th>Uptime</th><th>Auto</th><th></th></tr>${s.streams.map(x=>`<tr class="${x.problem?'prob':''}">
+ <td>${esc(x.name)}</td><td>${esc(x.status||'?')} ${x.problem?`<span class="mut">(${esc(x.reasons.join('; '))}, ${x.bad_count}x)</span>`:''}</td>
+ <td>${x.bitrate==null?'n/a':x.bitrate}</td><td>${dur(x.lag_s)}</td><td>${dur(x.uptime_s)}</td>
+ <td><select data-s="${s.id}" data-n="${esc(x.name)}" class="as"><option value="">herdar (${x.auto_restart==null?(s.auto_restart?'on':'off'):'—'})</option><option value="1" ${x.auto_restart===1?'selected':''}>on</option><option value="0" ${x.auto_restart===0?'selected':''}>off</option></select></td>
+ <td><button class="a rs" data-s="${s.id}" data-n="${esc(x.name)}">Reiniciar</button></td></tr>`).join('')}</table></div>`).join('');
+ $('#fs').onchange=e=>{f.srv=e.target.value;views.overview()};$('#fst').onchange=e=>{f.state=e.target.value;views.overview()};$('#fp').onchange=e=>{f.prob=e.target.checked;views.overview()};
+ document.querySelectorAll('.rs').forEach(b=>b.onclick=async()=>{if(confirm('Reiniciar '+b.dataset.n+'?')){const r=await api('/streams/restart',{method:'POST',body:{server_id:+b.dataset.s,name:b.dataset.n}});alert(r.ok?'Reinício enviado':'Falhou (veja Eventos)');views.overview()}});
+ document.querySelectorAll('.as').forEach(b=>b.onchange=()=>api('/streams/settings',{method:'PUT',body:{server_id:+b.dataset.s,name:b.dataset.n,auto_restart:b.value===''?null:b.value=='1'}}))},
+async servers(){const d=await api('/servers');
+ $('#main').innerHTML=`<div class="card"><b>Adicionar servidor</b><form id="nf" class="row">
+ <input name="name" placeholder="Nome" required><input name="base_url" placeholder="http://ip:8080" required size="28">
+ <select name="auth_type"><option>basic</option><option>bearer</option><option>none</option></select>
+ <input name="username" placeholder="usuário"><input name="password" type="password" placeholder="senha/token" autocomplete="new-password">
+ <select name="adapter"><option>auto</option><option>v3</option><option>legacy</option></select>
+ <input name="hotel" placeholder="hotel"><input name="cidade" placeholder="cidade">
+ <label><input type="checkbox" name="auto_restart"> reinício automático</label><label><input type="checkbox" name="verify_tls" checked> verificar TLS</label>
+ <button class="a">Salvar</button></form></div>
+ <div class="card"><table><tr><th>Nome</th><th>URL</th><th>Status</th><th>Versão</th><th>Auto-restart</th><th>Última coleta</th><th></th></tr>${d.map(s=>`<tr><td>${esc(s.name)} <span class="mut">${esc(Object.values(s.tags).join(' · '))}</span></td><td>${esc(s.base_url)}</td>
+ <td class="${s.status}">${s.status}</td><td>${esc(s.version||'?')}</td><td><input type="checkbox" class="ar" data-i="${s.id}" ${s.auto_restart?'checked':''}></td><td>${fmt(s.last_poll)}</td>
+ <td><button class="a t" data-i="${s.id}">Testar</button> <button class="a d" data-i="${s.id}">Remover</button></td></tr>`).join('')}</table></div>`;
+ $('#nf').onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));const b={name:o.name,base_url:o.base_url,auth_type:o.auth_type,username:o.username,password:o.password,adapter:o.adapter,
+  tags:Object.fromEntries(['hotel','cidade'].filter(k=>o[k]).map(k=>[k,o[k]])),auto_restart:!!o.auto_restart,verify_tls:!!o.verify_tls};await api('/servers',{method:'POST',body:b});views.servers()};
+ document.querySelectorAll('.t').forEach(b=>b.onclick=async()=>{b.textContent='...';const r=await api(`/servers/${b.dataset.i}/test`,{method:'POST'});alert(r.ok?`OK: perfil ${r.profile}, ${r.streams} streams, versão ${r.version||'?'}`:'Falha: '+r.error);b.textContent='Testar'});
+ document.querySelectorAll('.d').forEach(b=>b.onclick=async()=>{if(confirm('Remover servidor?')){await api('/servers/'+b.dataset.i,{method:'DELETE'});views.servers()}});
+ document.querySelectorAll('.ar').forEach(b=>b.onchange=async()=>{const s=d.find(x=>x.id==b.dataset.i);await api('/servers/'+s.id,{method:'PUT',body:{...s,auto_restart:b.checked}})})},
+async events(){const q=new URLSearchParams(location.hash.slice(1));const srv=await api('/servers');
+ const d=await api('/events?limit=300'+['server_id','stream','level','kind'].map(k=>q.get(k)?`&${k}=${encodeURIComponent(q.get(k))}`:'').join(''));
+ $('#main').innerHTML=`<div class="row"><select id="es"><option value="">Servidor</option>${srv.map(s=>`<option value="${s.id}" ${q.get('server_id')==s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
+ <input id="est" placeholder="stream" value="${esc(q.get('stream')||'')}"><select id="el"><option value="">Nível</option><option>info</option><option>warning</option><option>critical</option></select>
+ <input id="ek" placeholder="tipo (ex.: auto_restart)" value="${esc(q.get('kind')||'')}"><button class="a" id="eb">Filtrar</button></div>
+ <div class="card"><table><tr><th>Quando (BRT)</th><th>Nível</th><th>Servidor</th><th>Stream</th><th>Tipo</th><th>Mensagem</th></tr>${d.map(e=>`<tr><td>${fmt(e.ts)}</td><td class="${e.level}">${e.level}</td><td>${esc(e.server_name||'')}</td><td>${esc(e.stream||'')}</td><td>${e.kind}</td><td style="white-space:normal">${esc(e.message)}</td></tr>`).join('')}</table></div>`;
+ $('#eb').onclick=()=>{const p=new URLSearchParams();[['server_id','#es'],['stream','#est'],['level','#el'],['kind','#ek']].forEach(([k,s])=>$(s).value&&p.set(k,$(s).value));location.hash=p.toString();views.events()}},
+async snaps(){const d=await api('/snapshots');
+ $('#main').innerHTML=`<p class="mut">JSON bruto da API de cada stream, salvo imediatamente antes de cada reinício. Use para análise e para abrir chamado no suporte Flussonic.</p><div class="card"><table><tr><th>Quando (BRT)</th><th>Servidor</th><th>Stream</th><th>Motivo</th><th></th></tr>${d.map(s=>`<tr><td>${fmt(s.ts)}</td><td>${esc(s.server_name)}</td><td>${esc(s.stream)}</td><td>${esc(s.reason)}</td><td><a href="/api/snapshots/${s.id}?download=true">baixar JSON</a></td></tr>`).join('')}</table></div>`},
+async settings(){const s=await api('/settings');const ch=await api('/channels');
+ $('#main').innerHTML=`<div class="card"><b>Parâmetros</b><form id="sf" class="row">${Object.entries(s).map(([k,v])=>`<label>${k} <input name="${k}" type="number" step="any" value="${v}" style="width:90px"></label>`).join('')}<button class="a">Salvar</button></form></div>
+ <div class="card"><b>Canais de notificação</b><table>${ch.map(c=>`<tr><td>${esc(c.name)}</td><td>${c.type}</td><td>${c.min_level}</td><td><button class="a ct" data-i="${c.id}">Testar</button> <button class="a cd" data-i="${c.id}">Remover</button></td></tr>`).join('')}</table>
+ <form id="cf" class="row"><input name="name" placeholder="nome" required><select name="type"><option>webhook</option><option>telegram</option><option>email</option></select>
+ <input name="config" placeholder='{"url":"https://..."} | {"bot_token":"..","chat_id":".."} | {"host","port","username","password","from","to"}' size="60" required>
+ <select name="min_level"><option>warning</option><option>info</option><option>critical</option></select><button class="a">Adicionar</button></form></div>`;
+ $('#sf').onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));for(const k in o)o[k]=+o[k];await api('/settings',{method:'PUT',body:o});alert('Salvo')};
+ $('#cf').onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));try{o.config=JSON.parse(o.config)}catch{return alert('JSON inválido')}await api('/channels',{method:'POST',body:o});views.settings()};
+ document.querySelectorAll('.ct').forEach(b=>b.onclick=async()=>{const r=await api(`/channels/${b.dataset.i}/test`,{method:'POST'});alert(r.ok?'Enviado':'Falhou: '+r.error)});
+ document.querySelectorAll('.cd').forEach(b=>b.onclick=async()=>{await api('/channels/'+b.dataset.i,{method:'DELETE'});views.settings()})}};
+go();
+</script></body></html>
