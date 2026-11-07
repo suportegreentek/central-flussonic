@@ -14,7 +14,13 @@ from . import profiles
 
 
 class AdapterError(Exception):
-    pass
+    def __init__(self, msg, status=None):
+        super().__init__(msg)
+        self.status = status
+
+
+# Endereço de reinício que funcionou, por (servidor, perfil), para não retestar a cada vez.
+_RESTART_OK: dict = {}
 
 
 @dataclass
@@ -96,7 +102,7 @@ class Adapter:
         if r.status_code in (401, 403):
             raise AdapterError(f"autenticação recusada (HTTP {r.status_code})")
         if r.status_code >= 400:
-            raise AdapterError(f"HTTP {r.status_code} em {path}")
+            raise AdapterError(f"HTTP {r.status_code} em {path}", status=r.status_code)
         return r
 
     @staticmethod
@@ -134,11 +140,26 @@ class Adapter:
         return r.json()
 
     async def restart(self, name: str) -> dict:
-        p = self.prof
-        r = await self._req(p["restart_method"], p["restart_path"].format(name=quote(name, safe="")))
-        if r.text.strip().lower() == "false":
-            raise AdapterError("servidor respondeu false ao reinício")
-        return {"http_status": r.status_code, "body": r.text[:500]}
+        cands = list(self.prof["restart_candidates"])
+        key = (self.base, self.profile)
+        if key in _RESTART_OK and _RESTART_OK[key] in cands:  # tenta primeiro o que já funcionou
+            cands.remove(_RESTART_OK[key])
+            cands.insert(0, _RESTART_OK[key])
+        tried = []
+        for method, path in cands:
+            p = path.format(name=quote(name, safe=""))
+            try:
+                r = await self._req(method, p)
+            except AdapterError as e:
+                if e.status in (404, 405):  # endereço não existe nesta versão: tenta o próximo
+                    tried.append(f"{method} {path}")
+                    continue
+                raise
+            if r.text.strip().lower() == "false":
+                raise AdapterError("servidor respondeu false ao reinício")
+            _RESTART_OK[key] = (method, path)
+            return {"http_status": r.status_code, "body": r.text[:500], "endpoint": f"{method} {path}"}
+        raise AdapterError("nenhum endereço de reinício aceito por este servidor (tentados: " + "; ".join(tried) + ")")
 
     async def detect_version(self) -> Optional[str]:
         for path in self.prof.get("version_paths", []):

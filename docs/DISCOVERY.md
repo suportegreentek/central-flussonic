@@ -33,3 +33,8 @@ Agora o script baixa `/streamer/api/v3/schema` e imprime os **endpoints de strea
 e os **campos de stats com descrição e unidade**. É isso que confirma cada [H] em `app/adapters/profiles.py`.
 Se possível, rode com `--stream` apontando para um stream que **esteja em erro** naquele momento: isso mostra
 qual campo carrega o "4h delay" e testa a hipótese dos timestamps atrasados.
+
+## Reinício por versão (atualizado)
+- **21.10 (confirmado em servidor real):** `GET /flussonic/api/stream_restart/{nome}` → 200 `true`. O schema v3 desse servidor não lista restart.
+- **Outras versões (ex.: 23.01):** [H] a central tenta, em ordem, os endereços de `restart_candidates` (`app/adapters/profiles.py`), avançando só em 404/405, e lembra o que funcionou. O endereço usado aparece em `details.result.endpoint` do evento de reinício.
+- Para registrar uma nova versão: teste manualmente o reinício num stream, e se o endereço for outro, acrescente-o a `restart_candidates`.

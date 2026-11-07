@@ -14,8 +14,13 @@ PROFILES = {
         "cursor_param": "cursor",                         # [C] valor de "next" vai em cursor=
         "next_key": "next",                               # [C]
         "get_path": "/streamer/api/v3/streams/{name}",    # [C] "/" do nome codificado como %2F
-        "restart_method": "GET",                          # [C] testado no Streamer 21.10: responde 200 "true"
-        "restart_path": "/flussonic/api/stream_restart/{name}",     # [C] o schema v3 do 21.10 não tem restart
+        # Tentados em ordem; só passa ao próximo se o servidor responder 404/405 (endereço inexistente).
+        # O que funcionou fica lembrado por servidor. Outras versões podem usar outro endereço.
+        "restart_candidates": [
+            ("GET", "/flussonic/api/stream_restart/{name}"),            # [C] confirmado no Streamer 21.10 (200 "true")
+            ("POST", "/streamer/api/v3/streams/{name}/restart"),        # [H] versões mais novas; confirmar no 23.01
+            ("POST", "/flussonic/api/v3/streams/{name}/restart"),       # [H]
+        ],
         "version_paths": ["/streamer/api/v3/config", "/streamer/api/v3/config/stats"],  # [C] existem; campo de versão [H]
         "status_keys": ["status", "state"],               # [H] o manual não mostra stats.status
         "bitrate_keys": ["bitrate", "input_bitrate"],     # [C] stats.bitrate (usado em filtro); unidade [H] kbit/s
@@ -31,8 +36,7 @@ PROFILES = {
         "list_params": {},
         "cursor_param": None,
         "get_path": "/flussonic/api/media_info/{name}",
-        "restart_method": "GET",
-        "restart_path": "/flussonic/api/stream_restart/{name}",
+        "restart_candidates": [("GET", "/flussonic/api/stream_restart/{name}")],
         "version_paths": ["/flussonic/api/server", "/flussonic/api/config"],
         "status_keys": ["status", "state"],
         "bitrate_keys": ["input_bitrate", "bitrate"],

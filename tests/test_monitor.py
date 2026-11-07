@@ -134,3 +134,30 @@ def test_credentials_encrypted(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "SECRET_KEY", None)
     tok = crypto.encrypt_obj({"password": "segredo123"})
     assert "segredo123" not in tok and crypto.decrypt_obj(tok)["password"] == "segredo123"
+
+
+def test_restart_tries_candidates_per_version():
+    import asyncio, httpx
+    from app.adapters import base
+
+    def make(ok_method, ok_path, base_url):
+        def handler(req):
+            if req.method == ok_method and req.url.path == ok_path:
+                return httpx.Response(200, text="true")
+            return httpx.Response(404, text="Not found")
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        return base.Adapter(base_url, "none", {}, 5, True, "v3", client)
+
+    old = make("GET", "/flussonic/api/stream_restart/25", "http://old")
+    new = make("POST", "/streamer/api/v3/streams/25/restart", "http://new")
+    none = make("POST", "/nada", "http://none")
+    r1 = asyncio.run(old.restart("25"))
+    r2 = asyncio.run(new.restart("25"))
+    assert r1["endpoint"].startswith("GET /flussonic/api/stream_restart")
+    assert r2["endpoint"].startswith("POST /streamer/api/v3/streams")
+    assert base._RESTART_OK[("http://new", "v3")][0] == "POST"  # lembrou
+    try:
+        asyncio.run(none.restart("25"))
+        assert False
+    except base.AdapterError as e:
+        assert "nenhum endereço de reinício" in str(e)
