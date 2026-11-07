@@ -12,6 +12,7 @@ from . import config
 from .adapters.base import AdapterError, build_for_server
 from .crypto import decrypt_obj, encrypt_obj
 from .db import DB, iso, utcnow
+from . import importer
 from .monitor import Monitor
 from .version import VERSAO
 from .notify import CHANNEL_TYPES, Notifier
@@ -102,6 +103,51 @@ def _server(sid):
 @api.get("/servers")
 def list_servers():
     return [public(s) for s in db.q("SELECT * FROM servers ORDER BY name")]
+
+
+class ImportIn(BaseModel):
+    csv: str
+    default_username: Optional[str] = None
+    default_password: Optional[str] = None
+    dry_run: bool = True             # True = só verifica; False = importa de fato
+
+
+@api.get("/servers/import-modelo")
+def import_modelo():
+    return Response("\ufeff" + importer.MODELO, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="modelo-hoteis.csv"'})
+
+
+@api.post("/servers/import")
+def import_servers(b: ImportIn):
+    rows, err = importer.parse(b.csv, b.default_username, b.default_password)
+    if err:
+        raise HTTPException(422, err)
+    have_names = {r["name"].lower() for r in db.q("SELECT name FROM servers")}
+    have_urls = {r["base_url"].lower() for r in db.q("SELECT base_url FROM servers")}
+    linhas, imported = [], 0
+    for r in rows:
+        status, msg = "ok", ("será importado" if b.dry_run else "importado")
+        if r["erro"]:
+            status, msg = "erro", r["erro"]
+        elif r["name"].lower() in have_names or r["base_url"].lower() in have_urls:
+            status, msg = "duplicado", "já cadastrado (mesmo nome ou endereço); ignorado"
+        elif not b.dry_run:
+            body = ServerIn(name=r["name"], base_url=r["base_url"], username=r["username"], password=r["password"],
+                            adapter=r["adapter"], auto_restart=r["auto_restart"],
+                            tags={"cidade": r["cidade"]} if r["cidade"] else {})
+            sid = db.x("INSERT INTO servers(name,base_url,auth_type,credentials_enc,verify_tls,adapter,tags,enabled,auto_restart,created_at)"
+                       " VALUES(?,?,?,?,?,?,?,?,?,?)",
+                       (body.name, body.base_url, "basic", _creds(body), 1, body.adapter, json.dumps(body.tags), 1,
+                        int(body.auto_restart), iso(utcnow())))
+            db.add_event("info", "server_added", "Servidor cadastrado (importação)", _server(sid))
+            imported += 1
+        if status == "ok":
+            have_names.add(r["name"].lower()); have_urls.add(r["base_url"].lower())
+        linhas.append({"line": r["line"], "name": r["name"], "url": r["base_url"] or "", "status": status, "message": msg})
+    cont = lambda s: sum(1 for x in linhas if x["status"] == s)
+    return {"dry_run": b.dry_run, "total": len(linhas), "validos": cont("ok"), "duplicados": cont("duplicado"),
+            "erros": cont("erro"), "importados": imported, "linhas": linhas}
 
 
 @api.post("/servers", status_code=201)

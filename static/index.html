@@ -111,6 +111,7 @@ function ask(msg,ok='Confirmar'){return new Promise(r=>{$('#dmsg').textContent=m
 async function api(p,o={}){let r;try{r=await fetch('/api'+p,{headers:{'Content-Type':'application/json'},...o,body:o.body&&JSON.stringify(o.body)})}catch{toast('Sem conexão com a central. Tente novamente.','erro');throw 0}
  if(!r.ok){toast('Erro: '+(await r.text()).slice(0,200),'erro');throw 0}return r.status==204?null:r.json()}
 const stc=(n,t)=>`<div class="est"><span class="mono">${esc(n)}</span>${t?`<div class="mut tit">${esc(t)}</div>`:''}</div>`;
+const tg=s=>Object.entries(s.tags||{}).filter(([k])=>k!='hotel').map(([,v])=>v).join(' · '); // o nome já é o hotel
 const vazio=m=>`<div class="estado">${m}</div>`;
 const lvl={info:['Info','b-info'],warning:['Alerta','b-warn'],critical:['Crítico','b-bad']};
 const lb=l=>{const[x,c]=lvl[l]||[l,'b-info'];return `<span class="badge ${c}">${x}</span>`};
@@ -137,7 +138,7 @@ async overview(){const d=await api(`/overview?only_problems=${f.prob}${f.srv?'&s
  <label class="chk"><input type="checkbox" id="fp" ${f.prob?'checked':''}> Só com problema</label></div>
  <p><span class="sumario ${bad?'b-bad':'b-ok'}">${bad?bad+' stream(s) com problema':'Nenhum stream com problema'}</span></p>`+
  (d.length?d.map(s=>`<section class="card"><h3>${esc(s.name)} ${stb(s.status)}</h3>
- <p class="mut">${esc(Object.values(s.tags).join(' · '))} · versão <span class="mono">${esc(s.version||'?')}</span> · reinício automático do servidor: ${s.auto_restart?'ligado':'desligado'} ${s.status=='offline'?'· '+esc(s.last_error||''):''}</p>
+ <p class="mut">${esc(tg(s))} · versão <span class="mono">${esc(s.version||'?')}</span> · reinício automático do servidor: ${s.auto_restart?'ligado':'desligado'} ${s.status=='offline'?'· '+esc(s.last_error||''):''}</p>
  ${s.streams.length?`<table class="tbl"><thead><tr><th>Stream</th><th>Estado</th><th>Bitrate</th><th>Atraso</th><th>Tempo ativo</th><th>Reinício automático</th><th></th></tr></thead><tbody>${s.streams.map(x=>`<tr class="${x.problem?'prob':''}">
  <td data-l="Stream">${stc(x.name,x.title)}</td>
  <td data-l="Estado"><div class="est">${x.problem?'<span class="badge b-bad">Problema</span> ':'<span class="badge b-ok">Normal</span> '}<span class="mono">${esc(x.status||'?')}</span>${x.problem?`<div class="mut">${esc(x.reasons.join('; '))} (${x.bad_count}x)</div>`:''}</div></td>
@@ -150,25 +151,38 @@ async overview(){const d=await api(`/overview?only_problems=${f.prob}${f.srv?'&s
  document.querySelectorAll('.as').forEach(b=>b.onchange=()=>api('/streams/settings',{method:'PUT',body:{server_id:+b.dataset.s,name:b.dataset.n,auto_restart:b.value===''?null:b.value=='1'}}).then(()=>toast('Salvo.','ok')))},
 async servers(){const d=await api('/servers');
  const es=editSrv&&d.find(x=>x.id==editSrv);if(editSrv&&!es)editSrv=null;
- $('#main').innerHTML=`<h2>Servidores</h2><section class="card"><h3>${es?'Editar servidor '+esc(es.name):'Adicionar servidor Flussonic'}</h3><form id="nf"><div class="row">
+ $('#main').innerHTML=`<h2>Servidores</h2>${es?'':`<section class="card"><h3>Importar lista de hotéis</h3>
+ <p class="mut">Envie uma planilha salva como <b>CSV</b> (no Excel: Arquivo → Salvar como → CSV). Colunas: <span class="mono">nome</span> e <span class="mono">url</span> são obrigatórias; <span class="mono">usuario</span>, <span class="mono">senha</span>, <span class="mono">cidade</span> são opcionais. Antes de importar, a lista é só verificada.</p>
+ <div class="row">${campo('Arquivo CSV','<input type="file" id="ifile" accept=".csv,.txt,text/csv,text/plain">')}</div>
+ <div class="row">${campo('Usuário padrão (para linhas sem usuário)','<input type="text" id="iuser" autocomplete="off">')}${campo('Senha padrão (para linhas sem senha)','<input type="password" id="ipass" autocomplete="new-password">')}</div>
+ <div class="row"><button class="btn pri" id="ichk">Verificar arquivo</button><a class="btn" href="/api/servers/import-modelo">Baixar modelo</a></div><div id="ires"></div></section>`}<section class="card"><h3>${es?'Editar servidor '+esc(es.name):'Adicionar servidor Flussonic'}</h3><form id="nf"><div class="row">
  ${campo('Nome',`<input type="text" name="name" required>`)}${campo('Endereço (URL)',`<input type="url" name="base_url" placeholder="http://ip:8080" inputmode="url" required>`)}</div><div class="row">
  ${campo('Autenticação',`<select name="auth_type"><option value="basic">Usuário e senha</option><option value="bearer">Token</option><option value="none">Nenhuma</option></select>`)}
  ${campo('Usuário',`<input type="text" name="username" autocomplete="off" placeholder="${es?'Em branco = manter o atual':''}">`)}${campo('Senha ou token',`<input type="password" name="password" autocomplete="new-password" placeholder="${es?'Em branco = manter a atual':''}">`)}</div><div class="row">
  ${campo('Tipo de API',`<select name="adapter"><option value="auto">Automático</option><option value="v3">v3</option><option value="legacy">Antiga</option></select>`)}
- ${campo('Hotel',`<input type="text" name="hotel">`)}${campo('Cidade',`<input type="text" name="cidade">`)}</div>
+ ${campo('Cidade',`<input type="text" name="cidade">`)}</div>
  <label class="chk"><input type="checkbox" name="auto_restart"> Reinício automático</label><label class="chk"><input type="checkbox" name="verify_tls" checked> Verificar certificado TLS</label>
  <div class="row"><button class="btn pri">${es?'Salvar alterações':'Salvar servidor'}</button>${es?'<button type="button" class="btn" id="ncan">Cancelar edição</button>':''}</div></form></section>
  <section class="card">${d.length?`<table class="tbl"><thead><tr><th>Nome</th><th>Endereço</th><th>Estado</th><th>Versão</th><th>Reinício automático</th><th>Última coleta</th><th></th></tr></thead><tbody>${d.map(s=>`<tr>
- <td data-l="Nome">${esc(s.name)}<br><span class="mut">${esc(Object.values(s.tags).join(' · '))}</span></td><td data-l="Endereço" class="mono">${esc(s.base_url)}</td>
+ <td data-l="Nome">${esc(s.name)}<br><span class="mut">${esc(tg(s))}</span></td><td data-l="Endereço" class="mono">${esc(s.base_url)}</td>
  <td data-l="Estado">${stb(s.status)}</td><td data-l="Versão" class="mono">${esc(s.version||'?')}</td>
  <td data-l="Reinício automático"><label class="chk"><input type="checkbox" class="ar" data-i="${s.id}" aria-label="Reinício automático de ${esc(s.name)}" ${s.auto_restart?'checked':''}></label></td><td data-l="Última coleta">${fmt(s.last_poll)}</td>
  <td class="act"><button class="btn t" data-i="${s.id}">Testar</button> <button class="btn ed" data-i="${s.id}">Editar</button> <button class="btn dng d" data-i="${s.id}" data-n="${esc(s.name)}">Remover</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum servidor cadastrado. Preencha o formulário acima para adicionar o primeiro servidor Flussonic.')}</section>`;
  if(es){const f=$('#nf').elements;f.name.value=es.name;f.base_url.value=es.base_url;f.auth_type.value=es.auth_type;f.adapter.value=es.adapter;
-  f.hotel.value=es.tags.hotel||'';f.cidade.value=es.tags.cidade||'';f.auto_restart.checked=!!es.auto_restart;f.verify_tls.checked=!!es.verify_tls;
+  f.cidade.value=es.tags.cidade||'';f.auto_restart.checked=!!es.auto_restart;f.verify_tls.checked=!!es.verify_tls;
   $('#ncan').onclick=()=>{editSrv=null;views.servers()};$('#nf').scrollIntoView()}
+ if(!es){let txt='';const lerArq=async()=>{const f=$('#ifile').files[0];if(!f){toast('Escolha um arquivo CSV primeiro.','erro');return null}
+   const buf=await f.arrayBuffer();try{return new TextDecoder('utf-8',{fatal:true}).decode(buf)}catch{return new TextDecoder('windows-1252').decode(buf)}};
+  const chamar=dry=>api('/servers/import',{method:'POST',body:{csv:txt,default_username:$('#iuser').value||null,default_password:$('#ipass').value||null,dry_run:dry}});
+  const badge={ok:'<span class="badge b-ok">OK</span>',duplicado:'<span class="badge b-warn">Já existe</span>',erro:'<span class="badge b-bad">Erro</span>'};
+  const mostra=r=>{$('#ires').innerHTML=`<p><span class="sumario ${r.erros?'b-warn':'b-ok'}">${r.dry_run?`${r.validos} para importar · ${r.duplicados} já existem · ${r.erros} com erro`:`${r.importados} servidores importados · ${r.duplicados} já existiam · ${r.erros} com erro`}</span></p>
+   ${r.dry_run&&r.validos?`<div class="row"><button class="btn pri" id="igo">Importar ${r.validos} servidores</button></div>`:''}
+   <table class="tbl"><thead><tr><th>Linha</th><th>Nome</th><th>Endereço</th><th>Resultado</th></tr></thead><tbody>${r.linhas.map(l=>`<tr class="${l.status=='erro'?'prob':''}"><td data-l="Linha" class="mono">${l.line}</td><td data-l="Nome">${esc(l.name||'-')}</td><td data-l="Endereço" class="mono">${esc(l.url||'-')}</td><td data-l="Resultado">${badge[l.status]} <span class="mut">${esc(l.message)}</span></td></tr>`).join('')}</tbody></table>`;
+   if($('#igo'))$('#igo').onclick=async()=>{if(await ask(`Importar ${r.validos} servidores? As linhas com erro e as que já existem serão ignoradas.`,'Importar')){const x=await chamar(false);toast(`${x.importados} servidores importados.`,'ok');views.servers()}}};
+  $('#ichk').onclick=async()=>{const t=await lerArq();if(t==null)return;txt=t;$('#ichk').textContent='Verificando…';try{mostra(await chamar(true))}finally{$('#ichk').textContent='Verificar arquivo'}}}
  document.querySelectorAll('.ed').forEach(b=>b.onclick=()=>{editSrv=+b.dataset.i;views.servers()});
  $('#nf').onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));
-  const tags=es?Object.fromEntries(Object.entries(es.tags).filter(([k])=>k!='hotel'&&k!='cidade')):{};['hotel','cidade'].forEach(k=>{if(o[k])tags[k]=o[k]});
+  const tags=es?Object.fromEntries(Object.entries(es.tags).filter(([k])=>k!='hotel'&&k!='cidade')):{};if(o.cidade)tags.cidade=o.cidade;
   const b={name:o.name,base_url:o.base_url,auth_type:o.auth_type,adapter:o.adapter,tags,auto_restart:!!o.auto_restart,verify_tls:!!o.verify_tls,enabled:es?!!es.enabled:true};
   if(o.username||!es)b.username=o.username;if(o.password||!es)b.password=o.password;
   if(es){await api('/servers/'+es.id,{method:'PUT',body:b});editSrv=null;toast('Servidor atualizado.','ok')}else{await api('/servers',{method:'POST',body:b});toast('Servidor salvo.','ok')}views.servers()};

@@ -57,11 +57,19 @@ Versão atual: ver `app/version.py` (capítulo 05).
 
 ## 20 — Servidores e credenciais
 
-**20-1 Cadastro.** Nome, endereço (URL), autenticação (usuário e senha, token ou nenhuma), tipo de API (automático, v3 ou antiga), tags (hotel, cidade), reinício automático e verificação de TLS.
+**20-1 Cadastro.** Nome (que é o nome do hotel), endereço (URL), autenticação (usuário e senha, token ou nenhuma), tipo de API (automático, v3 ou antiga), cidade, reinício automático e verificação de TLS. Não existe campo "hotel" separado; tags `hotel` de cadastros antigos ficam ocultas.
 
 **20-2 Credenciais.** Criptografadas em repouso (Fernet). A chave vem de `CENTRAL_SECRET_KEY` ou é gerada em `data/secret.key` (permissão 0600). Nunca aparecem em logs, mensagens de erro ou evidências.
 
 **20-3 Edição.** Botão Editar na lista de servidores: abre o formulário preenchido. Usuário e senha em branco mantêm os atuais (as credenciais nunca voltam do servidor para a tela). Alterar a URL ou o tipo de API limpa a versão detectada, que é detectada de novo na próxima coleta.
+
+**20-5 Importação em lote (CSV).** Aba Servidores → "Importar lista de hotéis" (`app/importer.py`, `POST /api/servers/import`).
+- Arquivo: planilha salva como CSV (Excel: Salvar como → CSV). Separador vírgula, ponto e vírgula ou tab (detectado); UTF-8 ou Windows-1252 (acentos tratados). Modelo em "Baixar modelo".
+- Colunas (cabeçalho obrigatório, ordem livre, sem diferenciar acento/maiúscula): `nome` (ou `hotel`) e `url` obrigatórias; `usuario`, `senha`, `cidade`, `api` (auto, v3, antiga) e `reinicio_automatico` (sim/não) opcionais. URL sem `http://` recebe `http://`.
+- Usuário e senha padrão (campos da tela) valem para as linhas que não trazem os seus. Linha sem nenhum dos dois é rejeitada.
+- Fluxo em duas etapas: "Verificar arquivo" (nada é gravado; mostra por linha OK, Já existe ou Erro) e depois "Importar N servidores" (com confirmação). Reimportar a mesma lista não duplica: nome ou endereço já cadastrado é ignorado (não atualiza o existente; para isso use Editar).
+- Importados entram com reinício automático **desligado** (salvo coluna `reinicio_automatico`) e TLS verificado. Limite: 500 linhas e 1 MB por arquivo.
+- A senha nunca volta na resposta da API. O arquivo CSV contém senhas em texto: apagar depois de importar.
 
 **20-4 Usuários do servidor.** Leitura usa o usuário de visualização; o reinício exige usuário com permissão de escrita (`edit_auth`).
 

@@ -253,3 +253,43 @@ def test_editar_canal_mescla_config_sem_expor_segredo(tmp_path, monkeypatch):
         assert cfg == {"bot_token": "TOK", "chat_id": "@b"}
         assert c.put(f"/api/channels/{cid}", json={"min_level": "xx"}).status_code == 422
         assert c.put("/api/channels/999", json={}).status_code == 404
+
+
+def test_importador_formatos_do_excel_e_erros():
+    from app import importer
+    txt = ("﻿Hotel;URL;Usuário;Senha;Cidade\n"
+           "Hotel A;hotel-a.exemplo.com:7777;;;São Paulo\n"
+           "# comentário\n\n"
+           "Hotel B;http://hotel-b.exemplo.com:7777;proprio;segredo;Santos\n"
+           ";http://x:1;;;\n"
+           "Hotel D;ftp://x;;;\n")
+    rows, err = importer.parse(txt, "padrao", "senhapadrao")
+    assert err is None and len(rows) == 4
+    a, b, c, d = rows
+    assert a["erro"] is None and a["base_url"] == "http://hotel-a.exemplo.com:7777" and a["username"] == "padrao" and a["cidade"] == "São Paulo"
+    assert b["username"] == "proprio" and b["password"] == "segredo"  # a linha vale mais que o padrão
+    assert c["erro"] == "nome em branco" and "url inválida" in d["erro"]
+    rows, _ = importer.parse("nome,url\nH,http://h:1\n")  # vírgula, sem credenciais
+    assert "sem usuário/senha" in rows[0]["erro"]
+    assert importer.parse("foo;bar\n1;2\n")[1] and importer.parse("")[1]
+
+
+def test_importar_via_api_verifica_importa_e_ignora_duplicados(tmp_path, monkeypatch):
+    c, m = _client(tmp_path, monkeypatch)
+    csvtxt = "nome;url;cidade\nHotel A;http://a:1;SP\nHotel B;http://b:1;RJ\nHotel A;http://outro:1;SP\nHotel C;http://c:1;\n;http://d:1;\n"
+    body = {"csv": csvtxt, "default_username": "u", "default_password": "SENHA-SECRETA"}
+    with c:
+        m.db.x("DELETE FROM servers")  # o banco do app é compartilhado entre os testes
+        r = c.post("/api/servers/import", json=body).json()          # só verifica
+        assert (r["dry_run"], r["total"], r["validos"], r["duplicados"], r["erros"], r["importados"]) == (True, 5, 3, 1, 1, 0)
+        assert c.get("/api/servers").json() == []
+        r = c.post("/api/servers/import", json={**body, "dry_run": False}).json()
+        assert r["importados"] == 3 and "SENHA-SECRETA" not in str(r)  # senha nunca volta na resposta
+        servers = c.get("/api/servers").json()
+        assert [s["name"] for s in servers] == ["Hotel A", "Hotel B", "Hotel C"] and servers[0]["tags"] == {"cidade": "SP"}
+        cred = crypto.decrypt_obj(m.db.one("SELECT credentials_enc FROM servers WHERE name='Hotel A'")["credentials_enc"])
+        assert cred == {"username": "u", "password": "SENHA-SECRETA"}
+        r = c.post("/api/servers/import", json={**body, "dry_run": False}).json()  # reimportar não duplica
+        assert r["importados"] == 0 and r["duplicados"] == 4
+        assert c.post("/api/servers/import", json={"csv": "x;y\n1;2"}).status_code == 422
+        assert "nome;url" in c.get("/api/servers/import-modelo").text
