@@ -200,6 +200,12 @@ class Monitor:
         try:
             res = await adapter.restart(name)
         except AdapterError as e:
+            # Uma tentativa que falha também conta: respeita o intervalo mínimo e o limite por janela.
+            self.db.x("UPDATE streams SET last_restart_at=? WHERE server_id=? AND name=?",
+                      (dbm.iso(self.now()), s["id"], name))
+            if auto:
+                self.db.add_event("warning", "auto_restart", "Tentativa de reinício automático (falhou)",
+                                  s, name, {"error": str(e)}, now=self.now())
             await self.emit("critical" if auto else "warning", "restart_error", f"Falha ao reiniciar: {e}", s, name)
             return False
         self.db.x("UPDATE streams SET last_restart_at=?, restart_pending=1 WHERE server_id=? AND name=?",
