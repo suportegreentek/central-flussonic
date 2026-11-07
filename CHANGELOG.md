@@ -18,12 +18,19 @@ Mais recente no topo. Formato de cada entrada em `REGRAS.md` (seção 2.3).
 | 0.2.0 | 2026-11-07 | Interface refeita conforme DESIGN.md: tokens Greentek, mobile-first, marca única |
 | 0.1.0 | 2026-11-07 | Versão beta inicial: monitoramento, reinício automático/manual, evidências, versão visível |
 
+## [0.10.0] — 2026-11-07
+**O que:** dentro do servidor expansível da Visão geral: link "Abrir interface web" (protocolo://endereço:porta), botão "Editar servidor" e a caixa de reinício automático que liga/desliga ali mesmo.
+**Por quê:** pedido do Maicon.
+**Arquivos:** `static/index.html`, `DOCUMENTACAO.md`, `app/version.py`, `CHANGELOG.md`.
+**Como testar:** abrir um servidor na Visão geral, clicar no link, marcar/desmarcar o reinício automático e conferir em Servidores; `curl -I http://IP:8000/health` mostra `X-Greentek-Versao: 0.10.0`.
+**Commit:** a preencher na próxima entrada
+
 ## [0.9.1] — 2026-11-07
 **O que:** stream desativado no servidor (campo `disabled`) deixa de ser tratado como erro: não gera problema, alerta nem reinício, e aparece com o selo "Desativado".
 **Por quê:** relato do Maicon: streams desativados eram vistos como erro (sem bitrate).
 **Arquivos:** `app/adapters/base.py`, `app/monitor.py`, `static/index.html`, `tests/test_monitor.py`, `DOCUMENTACAO.md`, `app/version.py`.
 **Como testar:** `python -m pytest -q` (31 testes); na Visão geral um stream desativado mostra "Desativado"; `curl -I http://IP:8000/health` mostra `X-Greentek-Versao: 0.9.1`.
-**Commit:** a preencher na próxima entrada
+**Commit:** c5ec9db
 
 ## [0.9.0] — 2026-11-07
 **O que:** o endereço do servidor deixa de ser uma URL única e passa a ter três campos: protocolo (http/https), endereço (IP ou nome) e porta. Vale no formulário, na lista (coluna Porta), na API (`scheme`, `host`, `port`) e na importação (colunas `endereco`, `porta`, `protocolo`; a coluna `url` antiga continua aceita). Servidores já cadastrados são migrados automaticamente.

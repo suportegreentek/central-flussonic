@@ -150,6 +150,10 @@ function streamsTable(s){return s.streams.length?`<table class="tbl"><thead><tr>
  <td data-l="Bitrate" class="mono">${x.bitrate==null?'n/d':x.bitrate}</td><td data-l="Atraso" class="mono">${dur(x.lag_s)}</td><td data-l="Tempo ativo" class="mono">${dur(x.uptime_s)}</td>
  <td data-l="Reinício automático"><select aria-label="Reinício automático do stream ${esc(x.name)}" data-s="${s.id}" data-n="${esc(x.name)}" class="as"><option value="">Herdar</option><option value="1" ${x.auto_restart===1?'selected':''}>Ligado</option><option value="0" ${x.auto_restart===0?'selected':''}>Desligado</option></select></td>
  <td class="act"><button class="btn ig" data-s="${s.id}" data-sn="${esc(s.name)}" data-n="${esc(x.name)}" data-t="${esc(x.title||'')}" data-v="${x.ignored?0:1}">${x.ignored?'Voltar a monitorar':'Ignorar'}</button> <button class="btn rs" data-s="${s.id}" data-sn="${esc(s.name)}" data-n="${esc(x.name)}" data-t="${esc(x.title||'')}">Reiniciar</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum stream encontrado neste servidor com os filtros atuais.')}
+function srvBar(s){const url=s.base_url+'/';
+ return `<div class="row"><a class="btn" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="Abre ${esc(url)} em outra aba">Abrir interface web ↗</a><button class="btn ae" data-s="${s.id}">Editar servidor</button>
+ <label class="chk"><input type="checkbox" class="aa" data-s="${s.id}" aria-label="Reinício automático de ${esc(s.name)}" ${s.auto_restart?'checked':''}> Reinício automático dos streams</label></div>
+ <p class="mut mono">${esc(url)}</p>`}
 function sshBar(s){if(!s.ssh_efetivo)return `<p class="mut">SSH não configurado para este servidor (defina em Servidores ou em Configurações).</p>`;
  const b=(a,t,c='')=>`<button class="btn sx ${c}" data-a="${a}" data-s="${s.id}" data-sn="${esc(s.name)}">${t}</button>`;
  return `<div class="row">${b('test','Testar SSH')}${b('svc','Reiniciar serviço Flussonic (SSH)','dng')}${b('boot','Reiniciar servidor (SSH)','dng')}</div>`}
@@ -167,12 +171,15 @@ function drawOverview(){const {d,all}=OV;const foco=document.activeElement&&docu
  (list.length?list.map(s=>{const n=nprob(s),op=openSrv.has(s.id);return `<section class="card srv ${n||s.status=='offline'?'srv-bad':''}">
  <button class="srv-h" id="sh-${s.id}" data-id="${s.id}" aria-expanded="${op}" aria-controls="sb-${s.id}"><span class="srv-n">${esc(s.name)}</span>${stb(s.status)}${n?`<span class="badge b-bad">${n} com problema</span>`:''}${nign(s)?`<span class="badge b-warn">${nign(s)} ignorado(s)</span>`:''}${s.status=='online'?`<span class="mut mono srv-c">${s.streams.length} streams</span>`:''}<span class="chev" aria-hidden="true"></span></button>
  ${s.status=='offline'?`<div class="srv-e mut">${esc(s.last_error||'Sem resposta')}</div>`:''}
- <div class="srv-b" id="sb-${s.id}" ${op?'':'hidden'}>${op?`<p class="mut">${esc(tg(s))} ${tg(s)?'· ':''}versão <span class="mono">${esc(s.version||'?')}</span> · reinício automático do servidor: ${s.auto_restart?'ligado':'desligado'}</p>${sshBar(s)}${s.status=='online'?streamsTable(s):vazio(s.status=='offline'?'Servidor offline: sem dados de streams até ele voltar a responder.':'Aguardando a primeira coleta deste servidor.')}`:''}</div></section>`}).join(''):vazio('Nenhum servidor para mostrar. Cadastre um em <b>Servidores</b> ou ajuste os filtros.'));
+ <div class="srv-b" id="sb-${s.id}" ${op?'':'hidden'}>${op?`<p class="mut">${esc(tg(s))} ${tg(s)?'· ':''}versão <span class="mono">${esc(s.version||'?')}</span></p>${srvBar(s)}${sshBar(s)}${s.status=='online'?streamsTable(s):vazio(s.status=='offline'?'Servidor offline: sem dados de streams até ele voltar a responder.':'Aguardando a primeira coleta deste servidor.')}`:''}</div></section>`}).join(''):vazio('Nenhum servidor para mostrar. Cadastre um em <b>Servidores</b> ou ajuste os filtros.'));
  $('#fs').onchange=e=>{f.srv=e.target.value;views.overview()};$('#fst').onchange=e=>{f.state=e.target.value;views.overview()};$('#fp').onchange=e=>{f.prob=e.target.checked;views.overview()};
  $('#expp').onclick=()=>{list.filter(s=>nprob(s)).forEach(s=>openSrv.add(s.id));saveOpen();drawOverview()};
  $('#colt').onclick=()=>{openSrv.clear();saveOpen();drawOverview()};
  document.querySelectorAll('.srv-h').forEach(b=>b.onclick=()=>{const id=+b.dataset.id;openSrv.has(id)?openSrv.delete(id):openSrv.add(id);saveOpen();drawOverview()});
  if(foco&&$('#'+foco))$('#'+foco).focus();
+ document.querySelectorAll('.ae').forEach(b=>b.onclick=()=>{editSrv=+b.dataset.s;cur='servers';go()});
+ document.querySelectorAll('.aa').forEach(b=>b.onchange=async()=>{const sv=OV.d.find(x=>x.id==b.dataset.s);
+  try{const {streams,...rest}=sv;await api('/servers/'+sv.id,{method:'PUT',body:{...rest,auto_restart:b.checked}});sv.auto_restart=b.checked?1:0;toast(`Reinício automático ${b.checked?'ligado':'desligado'} em ${sv.name}.`,'ok')}catch{b.checked=!b.checked}});
  document.querySelectorAll('.sx').forEach(b=>b.onclick=async()=>{const a=b.dataset.a,n=b.dataset.sn;
   const msg={test:null,svc:`Reiniciar o SERVIÇO Flussonic do servidor ${n}? Todos os streams dele ficam fora do ar por instantes.`,boot:`Reiniciar o SERVIDOR INTEIRO ${n}? Ele ficará fora do ar por alguns minutos e todos os streams cairão.`}[a];
   if(msg&&!await ask(msg,a=='boot'?'Reiniciar servidor':'Reiniciar serviço'))return;
