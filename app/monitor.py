@@ -13,6 +13,8 @@ ERROR_WORDS = ("error", "fail", "dead", "stopped")
 def evaluate(ns, delay_threshold_s):
     """Retorna a lista de motivos pelos quais o stream é considerado com problema."""
     reasons = []
+    if getattr(ns, "disabled", False):  # desativado de propósito no servidor: sem bitrate é esperado
+        return reasons
     if ns.status and any(w in ns.status for w in ERROR_WORDS):
         reasons.append(f"status={ns.status}")
     elif ns.alive is False:
@@ -164,7 +166,7 @@ class Monitor:
                     pending = 0
 
             if not problem:
-                if alerted:
+                if alerted and not ns.disabled:
                     await self.emit("info", "recovered", "Stream recuperado", s, ns.name)
                 alerted = gave_up = 0
             elif bad >= st["persistence_checks"] and not alerted:

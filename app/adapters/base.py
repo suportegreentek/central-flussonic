@@ -34,6 +34,7 @@ class NormStream:
     alive: Optional[bool] = None
     raw: dict = field(default_factory=dict)
     title: Optional[str] = None   # nome amigável configurado no servidor (campo "title")
+    disabled: bool = False        # stream desativado de propósito no servidor (campo "disabled"): não é problema
 
 
 def _first(d: dict, keys):
@@ -70,7 +71,11 @@ def normalize(raw: dict, prof: dict, now: Optional[float] = None) -> NormStream:
     static = raw.get("static")
     if not isinstance(static, bool) and isinstance(raw.get("effective"), dict):
         static = raw["effective"].get("static")
-    return NormStream(name=name, status=str(status).lower() if status is not None else None,
+    eff = raw.get("effective") if isinstance(raw.get("effective"), dict) else {}
+    disabled = raw.get("disabled") is True or eff.get("disabled") is True or str(status).lower() == "disabled"
+    if disabled:
+        status = "disabled"
+    return NormStream(name=name, status=str(status).lower() if status is not None else None, disabled=disabled,
                       bitrate=float(bitrate) if isinstance(bitrate, (int, float)) else None,
                       lag_s=lag, uptime_s=uptime, static=static if isinstance(static, bool) else None, alive=alive, raw=raw,
                       title=raw["title"].strip() or None if isinstance(raw.get("title"), str) else None)

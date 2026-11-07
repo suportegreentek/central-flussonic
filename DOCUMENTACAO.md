@@ -95,6 +95,8 @@ Versão atual: ver `app/version.py` (capítulo 05).
 
 **30-5 Título do stream.** O campo `title` configurado em cada stream no servidor é lido na coleta e gravado junto ao stream. Eventos, evidências e notificações guardam o título vigente no momento (o histórico não muda se o título for alterado depois). Streams sem título aparecem só com o ID. Eventos anteriores à 0.3.0 não têm título.
 
+**30-5a Stream desativado.** Stream marcado como desativado no servidor (campo `disabled` do Flussonic, também em `effective.disabled`) nunca conta como problema: não alerta, não reinicia e aparece com o selo "Desativado". Se ele estava em alerta e foi desativado, o alerta é encerrado sem a mensagem "recuperado". **A forma exata como cada versão do Flussonic informa o desativado ainda não foi confirmada em servidor real** (ver capítulo 90).
+
 **30-6 Ignorar stream.** Para streams com problema persistente já conhecido. Botão "Ignorar" na linha do stream (Visão geral), com motivo opcional (até 200 caracteres). Enquanto ignorado, o stream continua sendo lido e o estado real continua visível, mas:
 - não conta como problema (nem no contador do servidor, nem no resumo, nem no filtro "Só com problema");
 - não gera alerta nem notificação e não é reiniciado automaticamente (o reinício manual continua disponível);
@@ -167,6 +169,7 @@ Versão atual: ver `app/version.py` (capítulo 05).
 
 - Só o endereço de reinício do Streamer 21.10 está confirmado em servidor real; os alternativos para versões novas (ex.: 23.01) são hipótese.
 - Unidades de `ts_delay` e `bitrate` e os campos de estado em `stats` (ex.: `last_dts_at`, `inputs[].active`) não foram confirmados com um stream travado real; a detecção usa campos assumidos.
+- O campo `disabled` (stream desativado) é uma hipótese baseada na configuração do Flussonic; confirmar com o JSON real de um stream desativado.
 - Dockerfile e docker-compose nunca foram executados.
 - Canais Telegram e e-mail não foram testados contra serviços reais.
 - `fms_en.pdf` (manual) está no repositório; remover se o repositório for compartilhado.

@@ -514,3 +514,29 @@ def test_importar_com_porta_e_protocolo_em_colunas():
     assert err is None
     assert [(r["scheme"], r["host"], r["port"]) for r in rows[:3]] == [("http", "1.2.3.4", 7777), ("https", "h.com", 8443), ("http", "h2.com", 81)]
     assert all(r["erro"] for r in rows[3:]) and not any(r["erro"] for r in rows[:3])
+
+
+def test_stream_desativado_nao_e_problema():
+    # sem stats (o servidor não coleta nada de um stream desativado) e com campo disabled
+    n = normalize({"name": "d", "disabled": True, "static": True}, PROFILES["v3"])
+    assert n.disabled and n.status == "disabled" and evaluate(n, 60) == []
+    n2 = normalize({"name": "d", "effective": {"disabled": True}, "stats": {"alive": False}}, PROFILES["v3"])
+    assert n2.disabled and evaluate(n2, 60) == []
+    assert not normalize({"name": "e", "disabled": False, "stats": {"alive": True, "bitrate": 1}}, PROFILES["v3"]).disabled
+
+    d = normalize({"name": "d", "disabled": True}, PROFILES["v3"])
+    a = FakeAdapter([d])
+    db, m, clk = setup(a)
+
+    async def go():
+        for _ in range(6):
+            await m.poll_all(); clk.adv(60)
+        assert a.restarted == []
+        assert db.q("SELECT kind FROM events WHERE kind IN ('problem','auto_restart')") == []
+        r = db.one("SELECT problem,status FROM streams")
+        assert r["problem"] == 0 and r["status"] == "disabled"
+    run(go())
+    # já alertado antes e depois desativado: não gera "recuperado" falso
+    db.x("UPDATE streams SET alerted=1")
+    run(m.poll_all())
+    assert db.q("SELECT kind FROM events WHERE kind='recovered'") == []
