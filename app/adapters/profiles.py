@@ -14,8 +14,8 @@ PROFILES = {
         "cursor_param": "cursor",                         # [C] valor de "next" vai em cursor=
         "next_key": "next",                               # [C]
         "get_path": "/streamer/api/v3/streams/{name}",    # [C] "/" do nome codificado como %2F
-        "restart_method": "POST",                         # [H] não consta no manual; ver schema do servidor
-        "restart_path": "/streamer/api/v3/streams/{name}/restart",  # [H]
+        "restart_method": "GET",                          # [C] testado no Streamer 21.10: responde 200 "true"
+        "restart_path": "/flussonic/api/stream_restart/{name}",     # [C] o schema v3 do 21.10 não tem restart
         "version_paths": ["/streamer/api/v3/config", "/streamer/api/v3/config/stats"],  # [C] existem; campo de versão [H]
         "status_keys": ["status", "state"],               # [H] o manual não mostra stats.status
         "bitrate_keys": ["bitrate", "input_bitrate"],     # [C] stats.bitrate (usado em filtro); unidade [H] kbit/s

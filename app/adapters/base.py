@@ -136,6 +136,8 @@ class Adapter:
     async def restart(self, name: str) -> dict:
         p = self.prof
         r = await self._req(p["restart_method"], p["restart_path"].format(name=quote(name, safe="")))
+        if r.text.strip().lower() == "false":
+            raise AdapterError("servidor respondeu false ao reinício")
         return {"http_status": r.status_code, "body": r.text[:500]}
 
     async def detect_version(self) -> Optional[str]:

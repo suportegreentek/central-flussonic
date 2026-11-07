@@ -1,5 +1,5 @@
 """Coleta periódica, detecção de problema, alertas e reinício automático."""
-import asyncio, json, logging
+import asyncio, json, logging, re
 from datetime import timedelta
 from . import db as dbm
 from .adapters.base import AdapterError, build_for_server
@@ -186,6 +186,19 @@ class Monitor:
             return
         await self.restart_stream(s, ns.name, adapter, reasons, auto=True, ns=ns)
 
+    @staticmethod
+    def redact(obj):
+        """Mascara token/senha em URLs (ex.: ?token=..., user:senha@host) antes de gravar o snapshot."""
+        if isinstance(obj, dict):
+            return {k: ("***" if re.search(r"pass|secret|token", str(k), re.I) and isinstance(v, str) else Monitor.redact(v))
+                    for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [Monitor.redact(x) for x in obj]
+        if isinstance(obj, str):
+            obj = re.sub(r"(?i)((?:token|password|passwd|pass|key|secret)=)[^&\s\"']+", r"\1***", obj)
+            return re.sub(r"(://[^/:@\s]+:)[^@/\s]+@", r"\1***@", obj)
+        return obj
+
     async def restart_stream(self, s, name, adapter, reasons, auto, ns=None):
         """Salva o snapshot ANTES do reinício; o reinício é a única escrita e é sempre registrado."""
         raw = None
@@ -195,7 +208,7 @@ class Monitor:
             raw = {"_snapshot_error": f"{type(e).__name__}", "list_raw": ns.raw if ns else None}
         self.db.x("INSERT INTO snapshots(ts,server_id,server_name,stream,reason,raw) VALUES(?,?,?,?,?,?)",
                   (dbm.iso(self.now()), s["id"], s["name"], name, ("auto: " if auto else "manual: ") + ", ".join(reasons or ["-"]),
-                   json.dumps(raw)))
+                   json.dumps(self.redact(raw))))
         kind = "auto_restart" if auto else "manual_restart"
         try:
             res = await adapter.restart(name)

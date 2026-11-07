@@ -76,7 +76,7 @@ if args.mode == "v3":
     def g(name: str):
         return render(name, STREAMS[name])
 
-    @app.post("/streamer/api/v3/streams/{name:path}/restart")
+    @app.get("/flussonic/api/stream_restart/{name:path}")  # igual ao Streamer 21.10 real
     def r(name: str):
         return do_restart(name)
 
