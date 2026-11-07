@@ -161,3 +161,17 @@ def test_restart_tries_candidates_per_version():
         assert False
     except base.AdapterError as e:
         assert "nenhum endereço de reinício" in str(e)
+
+
+def test_versao_visivel_em_header_health_e_rodape(tmp_path, monkeypatch):
+    monkeypatch.setenv("CENTRAL_DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("CENTRAL_ADMIN_PASSWORD", raising=False)
+    from fastapi.testclient import TestClient
+    from app.version import VERSAO
+    import app.main as m
+    with TestClient(m.app) as c:
+        for path in ("/health", "/"):
+            r = c.get(path)
+            assert r.headers["X-Greentek-Versao"] == VERSAO
+        assert c.get("/health").json()["versao"] == VERSAO
+        assert "{{VERSAO}}" not in c.get("/").text

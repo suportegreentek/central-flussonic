@@ -13,6 +13,7 @@ from .adapters.base import AdapterError, build_for_server
 from .crypto import decrypt_obj, encrypt_obj
 from .db import DB, iso, utcnow
 from .monitor import Monitor
+from .version import VERSAO
 from .notify import CHANNEL_TYPES, Notifier
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -40,7 +41,14 @@ async def lifespan(app):
     monitor.stop()
     await task
 
-app = FastAPI(title="Central Flussonic", lifespan=lifespan)
+app = FastAPI(title="Greentek Central de Monitoramento", version=VERSAO, lifespan=lifespan)
+
+
+@app.middleware("http")
+async def cabecalho_versao(request, call_next):
+    resp = await call_next(request)
+    resp.headers["X-Greentek-Versao"] = VERSAO
+    return resp
 api = FastAPI(dependencies=[Depends(require_auth)])  # montado em /api; protegido se CENTRAL_ADMIN_PASSWORD definido
 
 
@@ -285,9 +293,10 @@ app.mount("/api", api)
 
 @app.get("/health")
 def health():
-    return {"ok": True}
+    return {"ok": True, "versao": VERSAO}
 
 
 @app.get("/")
 def index(_=Depends(require_auth)):
-    return FileResponse("static/index.html")
+    html = open("static/index.html", encoding="utf-8").read().replace("{{VERSAO}}", VERSAO)
+    return Response(html, media_type="text/html; charset=utf-8")
