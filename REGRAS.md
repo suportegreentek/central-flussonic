@@ -4,7 +4,7 @@
 2. **O Maicon decide o escopo.** O agente programa. Pedido genérico ou ambíguo: perguntar, não inventar funcionalidade.
 3. **Fatos de plataforma só com documentação oficial.** Para Flussonic, buscar e citar a página oficial (flussonic.com/doc). Resumo de busca e fórum não valem como confirmação. Quando só houver fórum, dizer isso.
 4. **DESIGN.md é lei.** Toda tela, diálogo e componente novo ou alterado segue o DESIGN.md.
-5. **Marca única.** Só "Greentek Soluções Inteligentes" ou "Greentek". Nenhum nome legado ou de terceiros na interface.
+5. **Marca única do painel.** A marca do painel é só "Greentek Soluções Inteligentes" ou "Greentek". Nenhum nome legado. Nomes de terceiros (ex.: Flussonic) podem aparecer como referência ao produto monitorado, nunca como marca do painel.
 6. **Relatar com honestidade.** Teste que falhou é dito com a saída do erro. Passo que não foi feito é dito.
 7. **Ações difíceis de desfazer ou que afetam servidores em produção** (apagar, sobrescrever, reiniciar serviço, alterar configuração do Flussonic) pedem confirmação antes.
 8. **O Maicon está começando em git.** Explicar passos de git de forma simples, sem jargão.
