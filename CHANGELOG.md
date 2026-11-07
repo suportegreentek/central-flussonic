@@ -18,12 +18,19 @@ Mais recente no topo. Formato de cada entrada em `REGRAS.md` (seção 2.3).
 | 0.2.0 | 2026-11-07 | Interface refeita conforme DESIGN.md: tokens Greentek, mobile-first, marca única |
 | 0.1.0 | 2026-11-07 | Versão beta inicial: monitoramento, reinício automático/manual, evidências, versão visível |
 
+## [0.10.1] — 2026-11-07
+**O que:** a atualização automática da Visão geral não faz mais a tela pular nem perder o foco: não redesenha quando nada mudou, mantém a rolagem e o foco quando muda, e espera enquanto há digitação ou diálogo aberto.
+**Por quê:** relato do Maicon: ao atualizar um dado a tela pulava e o foco mudava.
+**Arquivos:** `static/index.html`, `DOCUMENTACAO.md`, `app/version.py`, `CHANGELOG.md`.
+**Como testar:** abrir um servidor com vários streams, rolar para baixo e focar um botão; aguardar a atualização de 15 s (ou provocar uma mudança) e ver que a posição e o foco ficam; `curl -I http://IP:8000/health` mostra `X-Greentek-Versao: 0.10.1`.
+**Commit:** a preencher na próxima entrada
+
 ## [0.10.0] — 2026-11-07
 **O que:** dentro do servidor expansível da Visão geral: link "Abrir interface web" (protocolo://endereço:porta), botão "Editar servidor" e a caixa de reinício automático que liga/desliga ali mesmo.
 **Por quê:** pedido do Maicon.
 **Arquivos:** `static/index.html`, `DOCUMENTACAO.md`, `app/version.py`, `CHANGELOG.md`.
 **Como testar:** abrir um servidor na Visão geral, clicar no link, marcar/desmarcar o reinício automático e conferir em Servidores; `curl -I http://IP:8000/health` mostra `X-Greentek-Versao: 0.10.0`.
-**Commit:** a preencher na próxima entrada
+**Commit:** 5e57a77
 
 ## [0.9.1] — 2026-11-07
 **O que:** stream desativado no servidor (campo `disabled`) deixa de ser tratado como erro: não gera problema, alerta nem reinício, e aparece com o selo "Desativado".

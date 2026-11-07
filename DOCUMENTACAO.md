@@ -143,6 +143,8 @@ Versão atual: ver `app/version.py` (capítulo 05).
 
 **60-3a Barra do servidor.** Ao abrir um servidor na Visão geral: "Abrir interface web" (abre `protocolo://endereço:porta/` em outra aba; a senha não vai no link), "Editar servidor" (leva ao formulário já preenchido) e a caixa "Reinício automático dos streams", que liga/desliga na hora, sem sair da Visão geral.
 
+**60-3b Atualização automática sem pulo.** A Visão geral atualiza a cada 15 s. Se nada mudou na tela, ela nem é redesenhada; se mudou, a posição da rolagem e o botão/campo em foco são mantidos. A atualização é adiada enquanto você digita ou escolhe algo num campo, ou enquanto há uma janela de confirmação aberta.
+
 **60-4 Comportamento.** Tabelas viram cartões no celular; status sempre em texto; confirmação antes de reiniciar ou remover; estados de carregando, vazio e erro com mensagem em português.
 
 ---

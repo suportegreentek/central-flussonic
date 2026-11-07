@@ -134,9 +134,9 @@ let cur='overview',timer,editSrv=null,editCh=null;
 $('#nav').innerHTML=Object.entries(tabs).map(([k,v])=>`<button data-k="${k}">${v}</button>`).join('');
 $('#menu').onclick=()=>{const o=$('#nav').classList.toggle('open');$('#menu').setAttribute('aria-expanded',o)};
 $('#nav').onclick=e=>{if(e.target.dataset.k){cur=e.target.dataset.k;$('#nav').classList.remove('open');$('#menu').setAttribute('aria-expanded',false);go()}};
-async function go(){clearInterval(timer);[...$('#nav').children].forEach(b=>b.dataset.k==cur?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));
+async function go(){clearInterval(timer);lastOv=null;[...$('#nav').children].forEach(b=>b.dataset.k==cur?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));
  $('#main').innerHTML='<p class="carga">Carregando…</p>';
- try{await views[cur]();if(cur=='overview')timer=setInterval(()=>views.overview().catch(()=>{}),15000)}
+ try{await views[cur]();if(cur=='overview')timer=setInterval(()=>{if(!ocupado())views.overview().catch(()=>{})},15000)}
  catch{$('#main').innerHTML='<div class="estado erro">Não foi possível carregar esta tela.<br><br><button class="btn" id="rt">Tentar novamente</button></div>';$('#rt').onclick=go}}
 const f={srv:'',state:'',prob:false};
 const campo=(l,inner)=>`<label class="fld"><span>${l}</span>${inner}</label>`;
@@ -157,12 +157,19 @@ function srvBar(s){const url=s.base_url+'/';
 function sshBar(s){if(!s.ssh_efetivo)return `<p class="mut">SSH não configurado para este servidor (defina em Servidores ou em Configurações).</p>`;
  const b=(a,t,c='')=>`<button class="btn sx ${c}" data-a="${a}" data-s="${s.id}" data-sn="${esc(s.name)}">${t}</button>`;
  return `<div class="row">${b('test','Testar SSH')}${b('svc','Reiniciar serviço Flussonic (SSH)','dng')}${b('boot','Reiniciar servidor (SSH)','dng')}</div>`}
-function drawOverview(){const {d,all}=OV;const foco=document.activeElement&&document.activeElement.id;
+let lastOv=null;
+// identifica o elemento em foco por id ou por classe+data-*, para devolver o foco depois de redesenhar
+function focusKey(){const a=document.activeElement;if(!a||a===document.body||!$('#main').contains(a))return null;
+ if(a.id)return '#'+a.id;const q=v=>String(v).replace(/["\\]/g,'\\$&');
+ return a.tagName.toLowerCase()+[...a.classList].map(c=>'.'+c).join('')+Object.entries(a.dataset).map(([k,v])=>`[data-${k.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())}="${q(v)}"]`).join('')}
+// não atualiza sozinho enquanto a pessoa digita/escolhe algo ou um diálogo está aberto
+const ocupado=()=>$('#dlg').open||(document.activeElement&&/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)&&$('#main').contains(document.activeElement)&&document.activeElement.type!='checkbox');
+function drawOverview(){const {d,all}=OV;
  const bad=d.reduce((n,s)=>n+nprob(s),0),ign=d.reduce((n,s)=>n+nign(s),0),on=d.filter(s=>s.status=='online').length,off=d.filter(s=>s.status=='offline').length,wait=d.length-on-off;
  // com filtro de problema/estado, esconde servidores sem nada a mostrar (offline continua visível: também é problema)
  const list=d.filter(s=>!(f.prob||f.state)||s.streams.length||s.status=='offline')
   .sort((a,b)=>nprob(b)-nprob(a)||(b.status=='offline')-(a.status=='offline')||a.name.localeCompare(b.name,'pt-BR')); // com problema, depois offline, depois o resto
- $('#main').innerHTML=`<h2>Visão geral</h2><div class="row">${campo('Servidor',`<select id="fs"><option value="">Todos os servidores</option>${all.map(s=>`<option value="${s.id}" ${f.srv==s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>`)}
+ const html=`<h2>Visão geral</h2><div class="row">${campo('Servidor',`<select id="fs"><option value="">Todos os servidores</option>${all.map(s=>`<option value="${s.id}" ${f.srv==s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>`)}
  ${campo('Estado do stream',`<input type="text" id="fst" placeholder="ex.: error" value="${esc(f.state)}" autocomplete="off">`)}
  <label class="chk"><input type="checkbox" id="fp" ${f.prob?'checked':''}> Só com problema</label></div>
  <div class="resumo"><span class="sumario b-ok">${on} online</span>${off?`<span class="sumario b-bad">${off} offline</span>`:''}${wait?`<span class="sumario b-info">${wait} aguardando coleta</span>`:''}
@@ -172,11 +179,14 @@ function drawOverview(){const {d,all}=OV;const foco=document.activeElement&&docu
  <button class="srv-h" id="sh-${s.id}" data-id="${s.id}" aria-expanded="${op}" aria-controls="sb-${s.id}"><span class="srv-n">${esc(s.name)}</span>${stb(s.status)}${n?`<span class="badge b-bad">${n} com problema</span>`:''}${nign(s)?`<span class="badge b-warn">${nign(s)} ignorado(s)</span>`:''}${s.status=='online'?`<span class="mut mono srv-c">${s.streams.length} streams</span>`:''}<span class="chev" aria-hidden="true"></span></button>
  ${s.status=='offline'?`<div class="srv-e mut">${esc(s.last_error||'Sem resposta')}</div>`:''}
  <div class="srv-b" id="sb-${s.id}" ${op?'':'hidden'}>${op?`<p class="mut">${esc(tg(s))} ${tg(s)?'· ':''}versão <span class="mono">${esc(s.version||'?')}</span></p>${srvBar(s)}${sshBar(s)}${s.status=='online'?streamsTable(s):vazio(s.status=='offline'?'Servidor offline: sem dados de streams até ele voltar a responder.':'Aguardando a primeira coleta deste servidor.')}`:''}</div></section>`}).join(''):vazio('Nenhum servidor para mostrar. Cadastre um em <b>Servidores</b> ou ajuste os filtros.'));
+ if(html===lastOv)return;   // nada mudou na tela: não redesenha (evita pulo e perda de foco)
+ lastOv=html;const fk=focusKey(),y=window.scrollY;$('#main').innerHTML=html;
  $('#fs').onchange=e=>{f.srv=e.target.value;views.overview()};$('#fst').onchange=e=>{f.state=e.target.value;views.overview()};$('#fp').onchange=e=>{f.prob=e.target.checked;views.overview()};
  $('#expp').onclick=()=>{list.filter(s=>nprob(s)).forEach(s=>openSrv.add(s.id));saveOpen();drawOverview()};
  $('#colt').onclick=()=>{openSrv.clear();saveOpen();drawOverview()};
  document.querySelectorAll('.srv-h').forEach(b=>b.onclick=()=>{const id=+b.dataset.id;openSrv.has(id)?openSrv.delete(id):openSrv.add(id);saveOpen();drawOverview()});
- if(foco&&$('#'+foco))$('#'+foco).focus();
+ try{const el=fk&&document.querySelector(fk);if(el)el.focus({preventScroll:true})}catch{}
+ window.scrollTo(0,y);
  document.querySelectorAll('.ae').forEach(b=>b.onclick=()=>{editSrv=+b.dataset.s;cur='servers';go()});
  document.querySelectorAll('.aa').forEach(b=>b.onchange=async()=>{const sv=OV.d.find(x=>x.id==b.dataset.s);
   try{const {streams,...rest}=sv;await api('/servers/'+sv.id,{method:'PUT',body:{...rest,auto_restart:b.checked}});sv.auto_restart=b.checked?1:0;toast(`Reinício automático ${b.checked?'ligado':'desligado'} em ${sv.name}.`,'ok')}catch{b.checked=!b.checked}});
