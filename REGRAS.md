@@ -51,7 +51,23 @@ Documentar faz parte de terminar a tarefa. Não é extra.
 
 Estrutura por capítulos, no padrão da especificação da aviação para dados técnicos. **Antes de escrever qualquer documentação nova, perguntar ao Maicon qual o esquema de capítulos**, se ainda não estiver definido aqui. Não se aplica aos arquivos acima enquanto não for decidido.
 
-Esquema de capítulos adotado: _(preencher após a decisão do Maicon)_
+Esquema de capítulos adotado (numeração `capítulo-seção`, na `DOCUMENTACAO.md`):
+
+| Cap. | Assunto |
+|---|---|
+| 00 | Geral: finalidade, componentes, convenções |
+| 05 | Versionamento e histórico |
+| 10 | Instalação e operação |
+| 20 | Servidores e credenciais |
+| 30 | Monitoramento e detecção |
+| 40 | Reinício e evidências |
+| 50 | Alertas e notificações |
+| 60 | Interface |
+| 70 | API e adaptadores por versão |
+| 80 | Testes e simulação |
+| 90 | Problemas conhecidos |
+
+Assunto novo entra no capítulo que mais combina; capítulo novo só com autorização do Maicon.
 
 # PARTE 3 — Regra para tudo que for web
 
