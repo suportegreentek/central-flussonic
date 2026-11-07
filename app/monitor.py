@@ -4,6 +4,7 @@ from datetime import timedelta
 from . import db as dbm
 from .adapters.base import AdapterError, build_for_server
 from .crypto import decrypt_obj
+from .notify import NOTIFY_ALSO
 
 log = logging.getLogger("monitor")
 ERROR_WORDS = ("error", "fail", "dead", "stopped")
@@ -38,9 +39,9 @@ class Monitor:
     # eventos ---------------------------------------------------------------
     async def emit(self, level, kind, message, server=None, stream=None, details=None):
         ev = self.db.add_event(level, kind, message, server, stream, details, now=self.now())
-        if self.notifier and level != "info":
+        if self.notifier and (level != "info" or kind in NOTIFY_ALSO):
             try:
-                await self.notifier.dispatch(ev)
+                await self.notifier.enqueue(ev)
             except Exception:
                 log.exception("erro ao despachar notificação")
         return ev
@@ -78,7 +79,18 @@ class Monitor:
                     await asyncio.wait_for(self.poll_server(s, st), timeout=st["request_timeout_s"] * 4 + 5)
                 except Exception as e:  # um servidor nunca derruba os demais
                     await self._mark_offline(s, f"{type(e).__name__}: {str(e)[:150]}")
-        await asyncio.gather(*(one(s) for s in servers))
+        n = self.notifier
+        if n:
+            n.batching = True   # os alertas do ciclo saem agrupados no fim, não um a um
+        try:
+            await asyncio.gather(*(one(s) for s in servers))
+        finally:
+            if n:
+                n.batching = False
+                try:
+                    await n.flush()
+                except Exception:
+                    log.exception("erro ao enviar notificações do ciclo")
 
     async def _mark_offline(self, s, err):
         now = dbm.iso(self.now())

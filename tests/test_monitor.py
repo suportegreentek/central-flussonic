@@ -358,3 +358,39 @@ def test_falha_de_notificacao_vira_evento_visivel(monkeypatch):
     asyncio.run(notify.Notifier(db).dispatch(ev))
     e = db.q("SELECT * FROM events WHERE kind='notify_error'")
     assert len(e) == 1 and "429" in e[0]["message"] and "tg" in e[0]["message"]
+
+
+def test_notificacoes_agrupadas_e_recuperacao(monkeypatch):
+    import asyncio
+    from app import notify
+    enviados = []
+
+    async def envia(self, ch, ev):
+        enviados.append(ev)
+        return None
+    monkeypatch.setattr(notify.Notifier, "send_one", envia)
+    import app.main as m
+    db = m.db
+    db.x("DELETE FROM channels"); db.x("DELETE FROM events")
+    db.x("INSERT INTO channels(type,name,config_enc,min_level,enabled) VALUES('telegram','tg','x','warning',1)")
+    n = notify.Notifier(db)
+
+    def ev(h, kind="problem", lv="warning"):
+        return {"level": lv, "kind": kind, "message": "m", "server_name": f"Hotel {h}", "stream": "7",
+                "stream_title": "CNN", "ts": "t"}
+    n.batching = True
+    for h in range(20):
+        asyncio.run(n.enqueue(ev(h)))
+    assert enviados == []                      # nada sai durante o ciclo
+    asyncio.run(n.flush())
+    assert len(enviados) == 1                  # 20 alertas viram 1 mensagem
+    assert "20" in enviados[0]["message"] and "CNN" in enviados[0]["message"]
+    enviados.clear()
+    for h in range(2):
+        asyncio.run(n.enqueue(ev(h)))
+    asyncio.run(n.flush())
+    assert len(enviados) == 2                  # poucos eventos saem individuais
+    enviados.clear()
+    n.batching = False
+    asyncio.run(n.enqueue(ev(1, "recovered", "info")))
+    assert len(enviados) == 1                  # recuperação é avisada mesmo sendo info

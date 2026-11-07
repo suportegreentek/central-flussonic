@@ -115,6 +115,10 @@ Versão atual: ver `app/version.py` (capítulo 05).
 
 **50-2 Canais.** Webhook, Telegram e e-mail, com nível mínimo por canal, ativar/desativar e botão de teste. Botão Editar: nome, nível mínimo e estado; a configuração (JSON) é opcional e, se informada, só os campos enviados mudam (ex.: trocar apenas `chat_id`, sem reenviar o token). O tipo do canal não muda (remova e crie outro). O teste do Telegram mostra o motivo da recusa, sem o token. Mensagens de notificação incluem o título do stream. A configuração do canal nunca vai para logs. Novos tipos entram em `CHANNEL_TYPES` (`notify.py`).
 
+**50-3 Agrupamento (muitos hotéis).** Os alertas de um ciclo de coleta esperam o fim do ciclo e saem agrupados por tipo. Até 3 eventos do mesmo tipo saem como mensagens separadas; acima disso vira **uma** mensagem-resumo, ex.: "20 com problema persistente", agrupada pelo título do stream, com a lista dos hotéis (até 8 por grupo, depois "e mais N"). Assim, uma fonte compartilhada que cai em vários hotéis gera uma mensagem, não dezenas. O histórico (aba Eventos) continua com um registro por stream. Ações manuais saem na hora.
+
+**50-4 Recuperação.** "Stream recuperado" também é avisado (para canais com nível mínimo info ou warning; canais só crítico não recebem). Se o envio falhar, há uma nova tentativa após 2 s e, se falhar de novo, aparece o evento `notify_error` em Eventos.
+
 ---
 
 ## 60 — Interface

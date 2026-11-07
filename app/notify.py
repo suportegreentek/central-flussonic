@@ -11,7 +11,7 @@ LEVELS = {"info": 0, "warning": 1, "critical": 2}
 def _text(ev):
     stream = f"{ev['stream']} ({ev['stream_title']})" if ev.get("stream") and ev.get("stream_title") else ev.get("stream")
     where = " / ".join(x for x in (ev.get("server_name"), stream) if x)
-    return f"[{ev['level'].upper()}] {where}: {ev['message']} ({ev['ts']} UTC)"
+    return f"[{ev['level'].upper()}] {where + ': ' if where else ''}{ev['message']} ({ev['ts']} UTC)"
 
 
 class Webhook:
@@ -57,27 +57,84 @@ class Email:
 CHANNEL_TYPES = {"webhook": Webhook, "telegram": Telegram, "email": Email}
 
 
+# Tipos que também são avisados mesmo sendo "info" (para canais com nível mínimo info ou warning).
+NOTIFY_ALSO = {"recovered"}
+GROUP_LIMIT = 3      # acima disso, os eventos do mesmo tipo viram UMA mensagem-resumo por ciclo
+KIND_TXT = {"problem": "com problema persistente", "auto_restart": "reiniciados automaticamente",
+            "restart_failed": "continuam com problema após o reinício", "restart_limit": "atingiram o limite de reinícios",
+            "restart_error": "falha ao reiniciar", "recovered": "recuperados", "server_offline": "servidores inacessíveis"}
+
+
+def wants(ch, ev):
+    mn = LEVELS.get(ch["min_level"], 1)
+    return LEVELS.get(ev["level"], 0) >= mn or (ev["kind"] in NOTIFY_ALSO and mn <= 1)
+
+
+def summarize(kind, evs):
+    """Junta vários eventos do mesmo tipo em uma mensagem: agrupa pelo nome do stream (ou título) e lista os hotéis."""
+    groups = {}
+    for e in evs:
+        label = e.get("stream_title") or e.get("stream") or "(servidor)"
+        groups.setdefault(label, []).append(e.get("server_name") or "?")
+    lines = []
+    for label, hotels in sorted(groups.items(), key=lambda kv: -len(kv[1]))[:12]:
+        names = ", ".join(hotels[:8]) + (f" e mais {len(hotels) - 8}" if len(hotels) > 8 else "")
+        lines.append(f"• {label}: {len(hotels)} — {names}" if label != "(servidor)" else f"• {names}")
+    if len(groups) > 12:
+        lines.append(f"… e mais {len(groups) - 12} grupos")
+    lv = max((e["level"] for e in evs), key=lambda x: LEVELS.get(x, 0))
+    msg = f"{len(evs)} {KIND_TXT.get(kind, kind)}\n" + "\n".join(lines)
+    return {"level": lv, "kind": kind, "server_name": None, "stream": None, "stream_title": None,
+            "ts": evs[-1]["ts"], "message": msg[:3500]}
+
+
+def build_messages(evs):
+    by = {}
+    for e in evs:
+        by.setdefault(e["kind"], []).append(e)
+    out = []
+    for kind, lst in by.items():
+        out += lst if len(lst) <= GROUP_LIMIT else [summarize(kind, lst)]
+    return out
+
+
 class Notifier:
     def __init__(self, db):
         self.db = db
+        self.queue = []
+        self.batching = False   # True durante o ciclo de coleta: os eventos esperam e saem agrupados em flush()
+
+    async def enqueue(self, ev):
+        self.queue.append(ev)
+        if not self.batching:
+            await self.flush()
+
+    async def flush(self):
+        events, self.queue = self.queue, []
+        if not events:
+            return
+        for ch in self.db.q("SELECT * FROM channels WHERE enabled=1"):
+            for m in build_messages([e for e in events if wants(ch, e)]):
+                await self._deliver(ch, m)
 
     async def dispatch(self, ev):
-        from .crypto import decrypt_obj
         for ch in self.db.q("SELECT * FROM channels WHERE enabled=1"):
-            if LEVELS.get(ev["level"], 0) < LEVELS.get(ch["min_level"], 1):
-                continue
+            if wants(ch, ev):
+                await self._deliver(ch, ev)
+
+    async def _deliver(self, ch, ev):
+        err = await self.send_one(ch, ev)
+        if err:  # uma segunda tentativa cobre falha de rede passageira
+            await asyncio.sleep(2)
             err = await self.send_one(ch, ev)
-            if err:  # uma segunda tentativa cobre falha de rede passageira
-                await asyncio.sleep(2)
-                err = await self.send_one(ch, ev)
-            if err:  # a falha precisa aparecer na tela (antes só ia para o log e o alerta sumia sem rastro)
-                try:
-                    self.db.add_event("info", "notify_error",
-                                      f"Não consegui enviar o alerta pelo canal '{ch['name']}': {err}",
-                                      None, None, {"canal": ch["name"], "evento": ev.get("kind"),
-                                                   "servidor": ev.get("server_name"), "stream": ev.get("stream")})
-                except Exception:
-                    log.exception("falha ao registrar erro de notificação")
+        if err:  # a falha precisa aparecer na tela (antes só ia para o log e o alerta sumia sem rastro)
+            try:
+                self.db.add_event("info", "notify_error",
+                                  f"Não consegui enviar o alerta pelo canal '{ch['name']}': {err}",
+                                  None, None, {"canal": ch["name"], "evento": ev.get("kind"),
+                                               "servidor": ev.get("server_name"), "stream": ev.get("stream")})
+            except Exception:
+                log.exception("falha ao registrar erro de notificação")
 
     async def send_one(self, ch, ev):
         from .crypto import decrypt_obj
