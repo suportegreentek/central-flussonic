@@ -61,7 +61,9 @@ Versão atual: ver `app/version.py` (capítulo 05).
 
 **20-2 Credenciais.** Criptografadas em repouso (Fernet). A chave vem de `CENTRAL_SECRET_KEY` ou é gerada em `data/secret.key` (permissão 0600). Nunca aparecem em logs, mensagens de erro ou evidências.
 
-**20-3 Usuários do servidor.** Leitura usa o usuário de visualização; o reinício exige usuário com permissão de escrita (`edit_auth`).
+**20-3 Edição.** Botão Editar na lista de servidores: abre o formulário preenchido. Usuário e senha em branco mantêm os atuais (as credenciais nunca voltam do servidor para a tela). Alterar a URL ou o tipo de API limpa a versão detectada, que é detectada de novo na próxima coleta.
+
+**20-4 Usuários do servidor.** Leitura usa o usuário de visualização; o reinício exige usuário com permissão de escrita (`edit_auth`).
 
 ---
 
@@ -72,6 +74,8 @@ Versão atual: ver `app/version.py` (capítulo 05).
 **30-2 Critérios de problema.** Estado indicando erro, bitrate zero ou ausente, ou atraso acima do limite configurado.
 
 **30-3 Persistência.** O alerta só sai após N verificações seguidas com problema (padrão 3).
+
+**30-5 Título do stream.** O campo `title` configurado em cada stream no servidor é lido na coleta e gravado junto ao stream. Eventos, evidências e notificações guardam o título vigente no momento (o histórico não muda se o título for alterado depois). Streams sem título aparecem só com o ID. Eventos anteriores à 0.3.0 não têm título.
 
 **30-4 Parâmetros** (aba Configurações): intervalo de coleta, tempo limite, servidores em paralelo, atraso máximo, verificações seguidas, intervalo mínimo entre reinícios, reinícios por janela, janela, verificação após reinício. Valores-padrão em `app/config.py`.
 
@@ -95,7 +99,7 @@ Versão atual: ver `app/version.py` (capítulo 05).
 
 **50-1 Eventos.** Nível info, alerta ou crítico, gravados no histórico (aba Eventos, com filtros por servidor, stream, nível e tipo).
 
-**50-2 Canais.** Webhook, Telegram e e-mail, com nível mínimo por canal e botão de teste. A configuração do canal nunca vai para logs. Novos tipos entram em `CHANNEL_TYPES` (`notify.py`).
+**50-2 Canais.** Webhook, Telegram e e-mail, com nível mínimo por canal, ativar/desativar e botão de teste. Botão Editar: nome, nível mínimo e estado; a configuração (JSON) é opcional e, se informada, só os campos enviados mudam (ex.: trocar apenas `chat_id`, sem reenviar o token). O tipo do canal não muda (remova e crie outro). O teste do Telegram mostra o motivo da recusa, sem o token. Mensagens de notificação incluem o título do stream. A configuração do canal nunca vai para logs. Novos tipos entram em `CHANNEL_TYPES` (`notify.py`).
 
 ---
 

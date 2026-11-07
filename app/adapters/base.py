@@ -33,6 +33,7 @@ class NormStream:
     static: Optional[bool]
     alive: Optional[bool] = None
     raw: dict = field(default_factory=dict)
+    title: Optional[str] = None   # nome amigável configurado no servidor (campo "title")
 
 
 def _first(d: dict, keys):
@@ -71,7 +72,8 @@ def normalize(raw: dict, prof: dict, now: Optional[float] = None) -> NormStream:
         static = raw["effective"].get("static")
     return NormStream(name=name, status=str(status).lower() if status is not None else None,
                       bitrate=float(bitrate) if isinstance(bitrate, (int, float)) else None,
-                      lag_s=lag, uptime_s=uptime, static=static if isinstance(static, bool) else None, alive=alive, raw=raw)
+                      lag_s=lag, uptime_s=uptime, static=static if isinstance(static, bool) else None, alive=alive, raw=raw,
+                      title=raw["title"].strip() or None if isinstance(raw.get("title"), str) else None)
 
 
 class Adapter:

@@ -222,7 +222,7 @@ def snapshots(server_id: Optional[int] = None, stream: Optional[str] = None, lim
     w, a = [], []
     if server_id: w.append("server_id=?"); a.append(server_id)
     if stream: w.append("stream=?"); a.append(stream)
-    return db.q("SELECT id,ts,server_id,server_name,stream,reason FROM snapshots" +
+    return db.q("SELECT id,ts,server_id,server_name,stream,stream_title,reason FROM snapshots" +
                 (" WHERE " + " AND ".join(w) if w else "") + " ORDER BY id DESC LIMIT ?", (*a, limit))
 
 
@@ -270,6 +270,29 @@ def add_channel(c: ChannelIn):
     cid = db.x("INSERT INTO channels(type,name,config_enc,min_level,enabled) VALUES(?,?,?,?,?)",
                (c.type, c.name, encrypt_obj(c.config), c.min_level, int(c.enabled)))
     return {"id": cid}
+
+
+class ChannelEdit(BaseModel):
+    name: Optional[str] = None
+    min_level: Optional[str] = None
+    enabled: Optional[bool] = None
+    config: Optional[dict] = None   # mesclada com a atual: só os campos informados mudam (segredos não voltam do servidor)
+
+
+@api.put("/channels/{cid}")
+def edit_channel(cid: int, c: ChannelEdit):
+    old = db.one("SELECT * FROM channels WHERE id=?", (cid,))
+    if not old:
+        raise HTTPException(404, "canal não encontrado")
+    if c.min_level is not None and c.min_level not in ("info", "warning", "critical"):
+        raise HTTPException(422, "min_level inválido")
+    cfg = decrypt_obj(old["config_enc"]) if old["config_enc"] else {}
+    if c.config:
+        cfg = {**cfg, **c.config}
+    db.x("UPDATE channels SET name=?,min_level=?,enabled=?,config_enc=? WHERE id=?",
+         (c.name or old["name"], c.min_level or old["min_level"],
+          int(c.enabled) if c.enabled is not None else old["enabled"], encrypt_obj(cfg), cid))
+    return {k: v for k, v in db.one("SELECT * FROM channels WHERE id=?", (cid,)).items() if k != "config_enc"}
 
 
 @api.delete("/channels/{cid}", status_code=204)

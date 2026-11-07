@@ -9,7 +9,8 @@ LEVELS = {"info": 0, "warning": 1, "critical": 2}
 
 
 def _text(ev):
-    where = " / ".join(x for x in (ev.get("server_name"), ev.get("stream")) if x)
+    stream = f"{ev['stream']} ({ev['stream_title']})" if ev.get("stream") and ev.get("stream_title") else ev.get("stream")
+    where = " / ".join(x for x in (ev.get("server_name"), stream) if x)
     return f"[{ev['level'].upper()}] {where}: {ev['message']} ({ev['ts']} UTC)"
 
 

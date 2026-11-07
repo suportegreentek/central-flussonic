@@ -191,3 +191,65 @@ def test_telegram_erro_mostra_motivo_sem_vazar_token(monkeypatch):
     err = asyncio.run(notify.Notifier(None).send_one(ch, {"level": "info", "kind": "test", "message": "m",
                                                            "server_name": None, "stream": None, "ts": "2026-01-01T00:00:00Z"}))
     assert "not a member" in err and "SEGREDO" not in err and "403" in err
+
+
+def test_eventos_e_evidencias_levam_o_titulo_do_stream():
+    n = ns("error", 0, 14400, name="25"); n.title = "SporTV 2 HD"
+    a = FakeAdapter([n])
+    db, m, clk = setup(a)
+    async def go():
+        for _ in range(3):
+            await m.poll_all()
+    run(go())
+    evs = db.q("SELECT kind,stream,stream_title FROM events WHERE stream='25'")
+    assert evs and all(e["stream_title"] == "SporTV 2 HD" for e in evs)
+    assert db.q("SELECT stream_title FROM snapshots")[0]["stream_title"] == "SporTV 2 HD"
+
+
+def test_normalize_le_title_e_banco_antigo_e_migrado(tmp_path):
+    assert normalize({"name": "25", "title": "  SporTV 2  "}, PROFILES["v3"]).title == "SporTV 2"
+    assert normalize({"name": "25"}, PROFILES["v3"]).title is None
+    import sqlite3
+    f = str(tmp_path / "old.db")
+    c = sqlite3.connect(f)
+    c.executescript("CREATE TABLE events(id INTEGER PRIMARY KEY, ts TEXT, server_id INTEGER, server_name TEXT, stream TEXT,"
+                    " level TEXT, kind TEXT, message TEXT, details TEXT);")
+    c.commit(); c.close()
+    d = DB(f)  # não pode falhar nem perder a tabela antiga
+    assert "stream_title" in [r["name"] for r in d.q("PRAGMA table_info(events)")]
+
+
+def test_notificacao_mostra_titulo():
+    from app.notify import _text
+    t = _text({"level": "warning", "server_name": "h1", "stream": "25", "stream_title": "SporTV 2", "message": "x", "ts": "t"})
+    assert "25 (SporTV 2)" in t
+
+
+def _client(tmp_path, monkeypatch):
+    monkeypatch.setenv("CENTRAL_DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("CENTRAL_ADMIN_PASSWORD", raising=False)
+    from fastapi.testclient import TestClient
+    import app.main as m
+    return TestClient(m.app), m
+
+
+def test_editar_servidor_mantem_senha_quando_omitida(tmp_path, monkeypatch):
+    c, m = _client(tmp_path, monkeypatch)
+    with c:
+        sid = c.post("/api/servers", json={"name": "h", "base_url": "http://x:1", "username": "u", "password": "segredo"}).json()["id"]
+        r = c.put(f"/api/servers/{sid}", json={"name": "h2", "base_url": "http://y:2", "auth_type": "basic"})
+        assert r.status_code == 200 and r.json()["name"] == "h2" and r.json()["base_url"] == "http://y:2"
+        cred = crypto.decrypt_obj(m.db.one("SELECT credentials_enc FROM servers WHERE id=?", (sid,))["credentials_enc"])
+        assert cred == {"username": "u", "password": "segredo"}
+
+
+def test_editar_canal_mescla_config_sem_expor_segredo(tmp_path, monkeypatch):
+    c, m = _client(tmp_path, monkeypatch)
+    with c:
+        cid = c.post("/api/channels", json={"type": "telegram", "name": "t", "config": {"bot_token": "TOK", "chat_id": "@a"}}).json()["id"]
+        r = c.put(f"/api/channels/{cid}", json={"name": "t2", "enabled": False, "config": {"chat_id": "@b"}})
+        assert r.status_code == 200 and r.json()["name"] == "t2" and r.json()["enabled"] == 0 and "config_enc" not in r.json()
+        cfg = crypto.decrypt_obj(m.db.one("SELECT config_enc FROM channels WHERE id=?", (cid,))["config_enc"])
+        assert cfg == {"bot_token": "TOK", "chat_id": "@b"}
+        assert c.put(f"/api/channels/{cid}", json={"min_level": "xx"}).status_code == 422
+        assert c.put("/api/channels/999", json={}).status_code == 404

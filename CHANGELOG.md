@@ -6,6 +6,7 @@ Mais recente no topo. Formato de cada entrada em `REGRAS.md` (seção 2.3).
 
 | Versão | Data | Resumo |
 |---|---|---|
+| 0.3.0 | 2026-11-07 | Editar servidores e canais; título do stream em eventos, evidências e notificações |
 | 0.2.5 | 2026-11-07 | Telegram: erro do teste mostra o motivo; assunto do e-mail com marca Greentek |
 | 0.2.4 | 2026-11-07 | Correção: `app/version.py` tinha sido gravado vazio na 0.2.3 |
 | 0.2.3 | 2026-11-07 | Documentação reorganizada no esquema de capítulos (ATA 100 adaptado) |
@@ -14,12 +15,19 @@ Mais recente no topo. Formato de cada entrada em `REGRAS.md` (seção 2.3).
 | 0.2.0 | 2026-11-07 | Interface refeita conforme DESIGN.md: tokens Greentek, mobile-first, marca única |
 | 0.1.0 | 2026-11-07 | Versão beta inicial: monitoramento, reinício automático/manual, evidências, versão visível |
 
+## [0.3.0] — 2026-11-07
+**O que:** (1) botão Editar em servidores e em canais de notificação (antes só incluir/remover); canais ganham ativar/desativar e edição parcial da configuração sem expor o token. (2) o título do stream (campo `title` do servidor) passa a aparecer em Eventos, Evidências, Visão geral, no diálogo de reinício e nas mensagens de notificação. Banco migrado automaticamente (colunas novas).
+**Por quê:** pedido do Maicon: identificar o stream pelo nome e corrigir cadastros sem apagar e recriar.
+**Arquivos:** `app/main.py`, `app/db.py`, `app/monitor.py`, `app/notify.py`, `app/adapters/base.py`, `static/index.html`, `tools/fake_flussonic.py`, `tests/test_monitor.py`, `DOCUMENTACAO.md`, `app/version.py`, `CHANGELOG.md`.
+**Como testar:** `python -m pytest -q` (16 passam); na tela, Servidores → Editar; Configurações → Editar canal; aba Eventos mostra o título abaixo do ID.
+**Commit:** a preencher na próxima entrada.
+
 ## [0.2.5] — 2026-11-07
 **O que:** quando o Telegram recusa a mensagem, o teste do canal mostra o motivo informado por ele (ex.: "bot is not a member of the channel chat") em vez de só "HTTPStatusError". O token nunca aparece na mensagem. Assunto do e-mail trocado de "[Flussonic]" para "[Greentek]".
 **Por quê:** configurar o bot `greentek_bot` para o canal `@greentek_notifica` e facilitar achar o erro; marca do painel só Greentek.
 **Arquivos:** `app/notify.py`, `tests/test_monitor.py`, `app/version.py`, `CHANGELOG.md`.
 **Como testar:** `python -m pytest -q` (11 passam); na aba Configurações, "Testar" no canal.
-**Commit:** a preencher na próxima entrada.
+**Commit:** 4eaa35c
 
 ## [0.2.4] — 2026-11-07
 **O que:** corrigido `app/version.py`, que ficou vazio na 0.2.3 e impedia a central de iniciar.

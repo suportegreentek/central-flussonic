@@ -126,6 +126,9 @@ class Monitor:
     # por stream ------------------------------------------------------------
     async def process_stream(self, s, ns, adapter, st):
         now = self.now()
+        # grava o título primeiro, para que os eventos desta rodada já saiam com ele
+        self.db.x("INSERT INTO streams(server_id,name,title) VALUES(?,?,?) "
+                  "ON CONFLICT(server_id,name) DO UPDATE SET title=excluded.title", (s["id"], ns.name, ns.title))
         row = self.db.one("SELECT * FROM streams WHERE server_id=? AND name=?", (s["id"], ns.name)) or {}
         reasons = evaluate(ns, st["delay_threshold_s"])
         problem = bool(reasons)
@@ -206,8 +209,8 @@ class Monitor:
             raw = await adapter.get_stream_raw(name)
         except Exception as e:
             raw = {"_snapshot_error": f"{type(e).__name__}", "list_raw": ns.raw if ns else None}
-        self.db.x("INSERT INTO snapshots(ts,server_id,server_name,stream,reason,raw) VALUES(?,?,?,?,?,?)",
-                  (dbm.iso(self.now()), s["id"], s["name"], name, ("auto: " if auto else "manual: ") + ", ".join(reasons or ["-"]),
+        self.db.x("INSERT INTO snapshots(ts,server_id,server_name,stream,stream_title,reason,raw) VALUES(?,?,?,?,?,?,?)",
+                  (dbm.iso(self.now()), s["id"], s["name"], name, self.db.stream_title(s["id"], name), ("auto: " if auto else "manual: ") + ", ".join(reasons or ["-"]),
                    json.dumps(self.redact(raw))))
         kind = "auto_restart" if auto else "manual_restart"
         try:

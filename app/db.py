@@ -57,6 +57,10 @@ class DB:
             if path != ":memory:":
                 self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.executescript(SCHEMA)
+            # migração: colunas de título do stream (bancos criados antes da 0.3.0)
+            for tbl, col in (("streams", "title"), ("events", "stream_title"), ("snapshots", "stream_title")):
+                if col not in [r[1] for r in self.conn.execute(f"PRAGMA table_info({tbl})")]:
+                    self.conn.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} TEXT")
             self.conn.commit()
 
     def q(self, sql, args=()):
@@ -92,9 +96,14 @@ class DB:
     # events -------------------------------------------------------------
     def add_event(self, level, kind, message, server=None, stream=None, details=None, now=None):
         ts = iso(now or utcnow())
+        title = self.stream_title(server["id"], stream) if server and stream else None
         eid = self.x(
-            "INSERT INTO events(ts,server_id,server_name,stream,level,kind,message,details) VALUES(?,?,?,?,?,?,?,?)",
-            (ts, server["id"] if server else None, server["name"] if server else None, stream,
+            "INSERT INTO events(ts,server_id,server_name,stream,stream_title,level,kind,message,details) VALUES(?,?,?,?,?,?,?,?,?)",
+            (ts, server["id"] if server else None, server["name"] if server else None, stream, title,
              level, kind, message, json.dumps(details) if details is not None else None))
         return {"id": eid, "ts": ts, "level": level, "kind": kind, "message": message,
-                "server_name": server["name"] if server else None, "stream": stream}
+                "server_name": server["name"] if server else None, "stream": stream, "stream_title": title}
+
+    def stream_title(self, server_id, stream):
+        r = self.one("SELECT title FROM streams WHERE server_id=? AND name=?", (server_id, stream))
+        return (r or {}).get("title")

@@ -45,7 +45,7 @@ def render(name, s):
         stats.update(ts_delay=4 * 3600 * 1000)
     elif st == "zero":
         stats.update(bitrate=0)
-    return {"name": name, "static": True, "stats": stats, "inputs": [{"url": "m4s://gs1.example/x"}, {"url": "m4s://gs2.example/x"}]}
+    return {"name": name, "title": "Canal " + name.split("/")[-1].upper(), "static": True, "stats": stats, "inputs": [{"url": "m4s://gs1.example/x"}, {"url": "m4s://gs2.example/x"}]}
 
 
 @app.post("/_sim/{name:path}")

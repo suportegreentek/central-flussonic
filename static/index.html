@@ -60,6 +60,7 @@ textarea{font-family:var(--mono);font-size:14px;min-height:88px}
 .tbl td select{width:auto;max-width:60%}
 .tbl td.full{display:block;text-align:left}.tbl td.full::before{display:block}
 .tbl td.act{justify-content:flex-end;flex-wrap:wrap}.tbl td.act::before{display:none}
+.tit{font-size:14px;white-space:normal;overflow-wrap:anywhere}
 .est{min-width:0;text-align:right}.est .mut{font-size:14px;margin-top:4px}
 .estado{padding:24px;text-align:center;color:var(--text-secondary);border:1px dashed var(--border);border-radius:8px}
 .estado.erro{color:var(--color-danger-500);border-color:var(--color-danger-500)}
@@ -76,7 +77,7 @@ a{color:var(--color-brand-green-500)}
   .tbl tr{display:table-row;border:0;border-radius:0;margin:0;padding:0;background:none}
   .tbl th{text-align:left;padding:8px;color:var(--text-tertiary);font-weight:600;font-size:14px;border-bottom:1px solid var(--border)}
   .tbl td{display:table-cell;padding:8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
-  .tbl td::before{display:none}
+  .tbl td::before,.tbl td.full::before{display:none}
   .tbl td select{width:100%;max-width:none}
   .est{text-align:left}
   .tbl td.act,.tbl td[data-l=Stream]{white-space:nowrap}
@@ -109,13 +110,14 @@ let tt;function toast(m,k){const t=$('#toast');t.textContent=m;t.className=k||''
 function ask(msg,ok='Confirmar'){return new Promise(r=>{$('#dmsg').textContent=msg;$('#dok').textContent=ok;const d=$('#dlg');d.onclose=()=>r(d.returnValue=='yes');d.showModal()})}
 async function api(p,o={}){let r;try{r=await fetch('/api'+p,{headers:{'Content-Type':'application/json'},...o,body:o.body&&JSON.stringify(o.body)})}catch{toast('Sem conexão com a central. Tente novamente.','erro');throw 0}
  if(!r.ok){toast('Erro: '+(await r.text()).slice(0,200),'erro');throw 0}return r.status==204?null:r.json()}
+const stc=(n,t)=>`<div class="est"><span class="mono">${esc(n)}</span>${t?`<div class="mut tit">${esc(t)}</div>`:''}</div>`;
 const vazio=m=>`<div class="estado">${m}</div>`;
 const lvl={info:['Info','b-info'],warning:['Alerta','b-warn'],critical:['Crítico','b-bad']};
 const lb=l=>{const[x,c]=lvl[l]||[l,'b-info'];return `<span class="badge ${c}">${x}</span>`};
 const stb=s=>s=='online'?'<span class="badge b-ok">Online</span>':s=='offline'?'<span class="badge b-bad">Offline</span>':'<span class="badge b-info">Aguardando coleta</span>';
 const tabs={overview:'Visão geral',servers:'Servidores',events:'Eventos',snaps:'Evidências',settings:'Configurações'};
 const rot={poll_interval_s:'Intervalo de coleta (s)',request_timeout_s:'Tempo limite por requisição (s)',concurrency:'Servidores em paralelo',delay_threshold_s:'Atraso máximo aceito (s)',persistence_checks:'Verificações seguidas para alertar',min_restart_interval_s:'Intervalo mínimo entre reinícios (s)',max_restarts_per_window:'Reinícios máximos por janela',restart_window_s:'Janela de reinícios (s)',verify_after_s:'Verificar após reinício (s)'};
-let cur='overview',timer;
+let cur='overview',timer,editSrv=null,editCh=null;
 $('#nav').innerHTML=Object.entries(tabs).map(([k,v])=>`<button data-k="${k}">${v}</button>`).join('');
 $('#menu').onclick=()=>{const o=$('#nav').classList.toggle('open');$('#menu').setAttribute('aria-expanded',o)};
 $('#nav').onclick=e=>{if(e.target.dataset.k){cur=e.target.dataset.k;$('#nav').classList.remove('open');$('#menu').setAttribute('aria-expanded',false);go()}};
@@ -137,31 +139,39 @@ async overview(){const d=await api(`/overview?only_problems=${f.prob}${f.srv?'&s
  (d.length?d.map(s=>`<section class="card"><h3>${esc(s.name)} ${stb(s.status)}</h3>
  <p class="mut">${esc(Object.values(s.tags).join(' · '))} · versão <span class="mono">${esc(s.version||'?')}</span> · reinício automático do servidor: ${s.auto_restart?'ligado':'desligado'} ${s.status=='offline'?'· '+esc(s.last_error||''):''}</p>
  ${s.streams.length?`<table class="tbl"><thead><tr><th>Stream</th><th>Estado</th><th>Bitrate</th><th>Atraso</th><th>Tempo ativo</th><th>Reinício automático</th><th></th></tr></thead><tbody>${s.streams.map(x=>`<tr class="${x.problem?'prob':''}">
- <td data-l="Stream" class="mono">${esc(x.name)}</td>
+ <td data-l="Stream">${stc(x.name,x.title)}</td>
  <td data-l="Estado"><div class="est">${x.problem?'<span class="badge b-bad">Problema</span> ':'<span class="badge b-ok">Normal</span> '}<span class="mono">${esc(x.status||'?')}</span>${x.problem?`<div class="mut">${esc(x.reasons.join('; '))} (${x.bad_count}x)</div>`:''}</div></td>
  <td data-l="Bitrate" class="mono">${x.bitrate==null?'n/d':x.bitrate}</td><td data-l="Atraso" class="mono">${dur(x.lag_s)}</td><td data-l="Tempo ativo" class="mono">${dur(x.uptime_s)}</td>
  <td data-l="Reinício automático"><select aria-label="Reinício automático do stream ${esc(x.name)}" data-s="${s.id}" data-n="${esc(x.name)}" class="as"><option value="">Herdar</option><option value="1" ${x.auto_restart===1?'selected':''}>Ligado</option><option value="0" ${x.auto_restart===0?'selected':''}>Desligado</option></select></td>
- <td class="act"><button class="btn rs" data-s="${s.id}" data-sn="${esc(s.name)}" data-n="${esc(x.name)}">Reiniciar</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum stream encontrado neste servidor com os filtros atuais.')}</section>`).join(''):vazio('Nenhum servidor para mostrar. Cadastre um em <b>Servidores</b> ou ajuste os filtros.'));
+ <td class="act"><button class="btn rs" data-s="${s.id}" data-sn="${esc(s.name)}" data-n="${esc(x.name)}" data-t="${esc(x.title||'')}">Reiniciar</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum stream encontrado neste servidor com os filtros atuais.')}</section>`).join(''):vazio('Nenhum servidor para mostrar. Cadastre um em <b>Servidores</b> ou ajuste os filtros.'));
  $('#fs').onchange=e=>{f.srv=e.target.value;views.overview()};$('#fst').onchange=e=>{f.state=e.target.value;views.overview()};$('#fp').onchange=e=>{f.prob=e.target.checked;views.overview()};
  if(foco&&$('#'+foco))$('#'+foco).focus();
- document.querySelectorAll('.rs').forEach(b=>b.onclick=async()=>{if(await ask(`Reiniciar o stream ${b.dataset.n} do servidor ${b.dataset.sn}? Os espectadores serão interrompidos por instantes.`,'Reiniciar')){const r=await api('/streams/restart',{method:'POST',body:{server_id:+b.dataset.s,name:b.dataset.n}});toast(r.ok?'Reinício enviado.':'Falhou. Veja a aba Eventos.',r.ok?'ok':'erro');views.overview()}});
+ document.querySelectorAll('.rs').forEach(b=>b.onclick=async()=>{if(await ask(`Reiniciar o stream ${b.dataset.n}${b.dataset.t?' ('+b.dataset.t+')':''} do servidor ${b.dataset.sn}? Os espectadores serão interrompidos por instantes.`,'Reiniciar')){const r=await api('/streams/restart',{method:'POST',body:{server_id:+b.dataset.s,name:b.dataset.n}});toast(r.ok?'Reinício enviado.':'Falhou. Veja a aba Eventos.',r.ok?'ok':'erro');views.overview()}});
  document.querySelectorAll('.as').forEach(b=>b.onchange=()=>api('/streams/settings',{method:'PUT',body:{server_id:+b.dataset.s,name:b.dataset.n,auto_restart:b.value===''?null:b.value=='1'}}).then(()=>toast('Salvo.','ok')))},
 async servers(){const d=await api('/servers');
- $('#main').innerHTML=`<h2>Servidores</h2><section class="card"><h3>Adicionar servidor Flussonic</h3><form id="nf"><div class="row">
+ const es=editSrv&&d.find(x=>x.id==editSrv);if(editSrv&&!es)editSrv=null;
+ $('#main').innerHTML=`<h2>Servidores</h2><section class="card"><h3>${es?'Editar servidor '+esc(es.name):'Adicionar servidor Flussonic'}</h3><form id="nf"><div class="row">
  ${campo('Nome',`<input type="text" name="name" required>`)}${campo('Endereço (URL)',`<input type="url" name="base_url" placeholder="http://ip:8080" inputmode="url" required>`)}</div><div class="row">
  ${campo('Autenticação',`<select name="auth_type"><option value="basic">Usuário e senha</option><option value="bearer">Token</option><option value="none">Nenhuma</option></select>`)}
- ${campo('Usuário',`<input type="text" name="username" autocomplete="off">`)}${campo('Senha ou token',`<input type="password" name="password" autocomplete="new-password">`)}</div><div class="row">
+ ${campo('Usuário',`<input type="text" name="username" autocomplete="off" placeholder="${es?'Em branco = manter o atual':''}">`)}${campo('Senha ou token',`<input type="password" name="password" autocomplete="new-password" placeholder="${es?'Em branco = manter a atual':''}">`)}</div><div class="row">
  ${campo('Tipo de API',`<select name="adapter"><option value="auto">Automático</option><option value="v3">v3</option><option value="legacy">Antiga</option></select>`)}
  ${campo('Hotel',`<input type="text" name="hotel">`)}${campo('Cidade',`<input type="text" name="cidade">`)}</div>
  <label class="chk"><input type="checkbox" name="auto_restart"> Reinício automático</label><label class="chk"><input type="checkbox" name="verify_tls" checked> Verificar certificado TLS</label>
- <button class="btn pri">Salvar servidor</button></form></section>
+ <div class="row"><button class="btn pri">${es?'Salvar alterações':'Salvar servidor'}</button>${es?'<button type="button" class="btn" id="ncan">Cancelar edição</button>':''}</div></form></section>
  <section class="card">${d.length?`<table class="tbl"><thead><tr><th>Nome</th><th>Endereço</th><th>Estado</th><th>Versão</th><th>Reinício automático</th><th>Última coleta</th><th></th></tr></thead><tbody>${d.map(s=>`<tr>
  <td data-l="Nome">${esc(s.name)}<br><span class="mut">${esc(Object.values(s.tags).join(' · '))}</span></td><td data-l="Endereço" class="mono">${esc(s.base_url)}</td>
  <td data-l="Estado">${stb(s.status)}</td><td data-l="Versão" class="mono">${esc(s.version||'?')}</td>
  <td data-l="Reinício automático"><label class="chk"><input type="checkbox" class="ar" data-i="${s.id}" aria-label="Reinício automático de ${esc(s.name)}" ${s.auto_restart?'checked':''}></label></td><td data-l="Última coleta">${fmt(s.last_poll)}</td>
- <td class="act"><button class="btn t" data-i="${s.id}">Testar</button> <button class="btn dng d" data-i="${s.id}" data-n="${esc(s.name)}">Remover</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum servidor cadastrado. Preencha o formulário acima para adicionar o primeiro servidor Flussonic.')}</section>`;
- $('#nf').onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));const b={name:o.name,base_url:o.base_url,auth_type:o.auth_type,username:o.username,password:o.password,adapter:o.adapter,
-  tags:Object.fromEntries(['hotel','cidade'].filter(k=>o[k]).map(k=>[k,o[k]])),auto_restart:!!o.auto_restart,verify_tls:!!o.verify_tls};await api('/servers',{method:'POST',body:b});toast('Servidor salvo.','ok');views.servers()};
+ <td class="act"><button class="btn t" data-i="${s.id}">Testar</button> <button class="btn ed" data-i="${s.id}">Editar</button> <button class="btn dng d" data-i="${s.id}" data-n="${esc(s.name)}">Remover</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum servidor cadastrado. Preencha o formulário acima para adicionar o primeiro servidor Flussonic.')}</section>`;
+ if(es){const f=$('#nf').elements;f.name.value=es.name;f.base_url.value=es.base_url;f.auth_type.value=es.auth_type;f.adapter.value=es.adapter;
+  f.hotel.value=es.tags.hotel||'';f.cidade.value=es.tags.cidade||'';f.auto_restart.checked=!!es.auto_restart;f.verify_tls.checked=!!es.verify_tls;
+  $('#ncan').onclick=()=>{editSrv=null;views.servers()};$('#nf').scrollIntoView()}
+ document.querySelectorAll('.ed').forEach(b=>b.onclick=()=>{editSrv=+b.dataset.i;views.servers()});
+ $('#nf').onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));
+  const tags=es?Object.fromEntries(Object.entries(es.tags).filter(([k])=>k!='hotel'&&k!='cidade')):{};['hotel','cidade'].forEach(k=>{if(o[k])tags[k]=o[k]});
+  const b={name:o.name,base_url:o.base_url,auth_type:o.auth_type,adapter:o.adapter,tags,auto_restart:!!o.auto_restart,verify_tls:!!o.verify_tls,enabled:es?!!es.enabled:true};
+  if(o.username||!es)b.username=o.username;if(o.password||!es)b.password=o.password;
+  if(es){await api('/servers/'+es.id,{method:'PUT',body:b});editSrv=null;toast('Servidor atualizado.','ok')}else{await api('/servers',{method:'POST',body:b});toast('Servidor salvo.','ok')}views.servers()};
  document.querySelectorAll('.t').forEach(b=>b.onclick=async()=>{b.textContent='Testando…';b.disabled=true;try{const r=await api(`/servers/${b.dataset.i}/test`,{method:'POST'});toast(r.ok?`Conexão OK: ${r.streams} streams, versão ${r.version||'?'}.`:'Falha: '+r.error,r.ok?'ok':'erro')}finally{b.textContent='Testar';b.disabled=false}});
  document.querySelectorAll('.d').forEach(b=>b.onclick=async()=>{if(await ask(`Remover o servidor ${b.dataset.n}? O histórico dele será apagado.`,'Remover')){await api('/servers/'+b.dataset.i,{method:'DELETE'});views.servers()}});
  document.querySelectorAll('.ar').forEach(b=>b.onchange=async()=>{const s=d.find(x=>x.id==b.dataset.i);await api('/servers/'+s.id,{method:'PUT',body:{...s,auto_restart:b.checked}});toast('Salvo.','ok')})},
@@ -171,20 +181,28 @@ async events(){const q=new URLSearchParams(location.hash.slice(1));const srv=awa
  ${campo('Stream',`<input type="text" id="est" value="${esc(q.get('stream')||'')}">`)}
  ${campo('Nível',`<select id="el"><option value="">Todos</option>${['info','warning','critical'].map(l=>`<option value="${l}" ${q.get('level')==l?'selected':''}>${lvl[l][0]}</option>`).join('')}</select>`)}
  ${campo('Tipo',`<input type="text" id="ek" placeholder="ex.: auto_restart" value="${esc(q.get('kind')||'')}">`)}<button class="btn pri" id="eb">Filtrar</button></div>
- <section class="card">${d.length?`<table class="tbl"><thead><tr><th>Quando (Brasília)</th><th>Nível</th><th>Servidor</th><th>Stream</th><th>Tipo</th><th>Mensagem</th></tr></thead><tbody>${d.map(e=>`<tr><td data-l="Quando" class="mono">${fmt(e.ts)}</td><td data-l="Nível">${lb(e.level)}</td><td data-l="Servidor">${esc(e.server_name||'-')}</td><td data-l="Stream" class="mono">${esc(e.stream||'-')}</td><td data-l="Tipo" class="mono">${esc(e.kind)}</td><td data-l="Mensagem" class="full">${esc(e.message)}</td></tr>`).join('')}</tbody></table>`:vazio('Nenhum evento com esses filtros.')}</section>`;
+ <section class="card">${d.length?`<table class="tbl"><thead><tr><th>Quando (Brasília)</th><th>Nível</th><th>Servidor</th><th>Stream</th><th>Tipo</th><th>Mensagem</th></tr></thead><tbody>${d.map(e=>`<tr><td data-l="Quando" class="mono">${fmt(e.ts)}</td><td data-l="Nível">${lb(e.level)}</td><td data-l="Servidor">${esc(e.server_name||'-')}</td><td data-l="Stream">${e.stream?stc(e.stream,e.stream_title):'-'}</td><td data-l="Tipo" class="mono">${esc(e.kind)}</td><td data-l="Mensagem" class="full">${esc(e.message)}</td></tr>`).join('')}</tbody></table>`:vazio('Nenhum evento com esses filtros.')}</section>`;
  $('#eb').onclick=()=>{const p=new URLSearchParams();[['server_id','#es'],['stream','#est'],['level','#el'],['kind','#ek']].forEach(([k,s])=>$(s).value&&p.set(k,$(s).value));location.hash=p.toString();views.events()}},
 async snaps(){const d=await api('/snapshots');
- $('#main').innerHTML=`<h2>Evidências</h2><p class="mut">Dados brutos de cada stream, salvos imediatamente antes de cada reinício, com tokens e senhas mascarados. Use para análise e para abrir chamado no suporte da Flussonic.</p><section class="card">${d.length?`<table class="tbl"><thead><tr><th>Quando (Brasília)</th><th>Servidor</th><th>Stream</th><th>Motivo</th><th></th></tr></thead><tbody>${d.map(s=>`<tr><td data-l="Quando" class="mono">${fmt(s.ts)}</td><td data-l="Servidor">${esc(s.server_name)}</td><td data-l="Stream" class="mono">${esc(s.stream)}</td><td data-l="Motivo" class="full">${esc(s.reason)}</td><td class="act"><a class="btn" href="/api/snapshots/${s.id}?download=true">Baixar JSON</a></td></tr>`).join('')}</tbody></table>`:vazio('Ainda não há evidências. Elas são salvas automaticamente antes de cada reinício.')}</section>`},
+ $('#main').innerHTML=`<h2>Evidências</h2><p class="mut">Dados brutos de cada stream, salvos imediatamente antes de cada reinício, com tokens e senhas mascarados. Use para análise e para abrir chamado no suporte da Flussonic.</p><section class="card">${d.length?`<table class="tbl"><thead><tr><th>Quando (Brasília)</th><th>Servidor</th><th>Stream</th><th>Motivo</th><th></th></tr></thead><tbody>${d.map(s=>`<tr><td data-l="Quando" class="mono">${fmt(s.ts)}</td><td data-l="Servidor">${esc(s.server_name)}</td><td data-l="Stream">${stc(s.stream,s.stream_title)}</td><td data-l="Motivo" class="full">${esc(s.reason)}</td><td class="act"><a class="btn" href="/api/snapshots/${s.id}?download=true">Baixar JSON</a></td></tr>`).join('')}</tbody></table>`:vazio('Ainda não há evidências. Elas são salvas automaticamente antes de cada reinício.')}</section>`},
 async settings(){const s=await api('/settings');const ch=await api('/channels');
  const ex={webhook:'{"url":"https://..."}',telegram:'{"bot_token":"...","chat_id":"..."}',email:'{"host":"","port":587,"username":"","password":"","from":"","to":""}'};
+ const ec=editCh&&ch.find(x=>x.id==editCh);if(editCh&&!ec)editCh=null;
  $('#main').innerHTML=`<h2>Configurações</h2><section class="card"><h3>Parâmetros</h3><form id="sf"><div class="row">${Object.entries(s).map(([k,v])=>campo(esc(rot[k]||k),`<input type="number" inputmode="decimal" step="any" name="${esc(k)}" value="${esc(v)}">`)).join('')}</div><button class="btn pri">Salvar parâmetros</button></form></section>
- <section class="card"><h3>Canais de notificação</h3>${ch.length?`<table class="tbl"><thead><tr><th>Nome</th><th>Tipo</th><th>Nível mínimo</th><th></th></tr></thead><tbody>${ch.map(c=>`<tr><td data-l="Nome">${esc(c.name)}</td><td data-l="Tipo">${esc(c.type)}</td><td data-l="Nível mínimo">${lb(c.min_level)}</td><td class="act"><button class="btn ct" data-i="${c.id}">Testar</button> <button class="btn dng cd" data-i="${c.id}" data-n="${esc(c.name)}">Remover</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum canal configurado. Adicione um abaixo para receber alertas.')}
- <form id="cf"><div class="row">${campo('Nome','<input type="text" name="name" required>')}${campo('Tipo',`<select name="type" id="ctype"><option value="webhook">Webhook</option><option value="telegram">Telegram</option><option value="email">E-mail</option></select>`)}
+ <section class="card"><h3>Canais de notificação</h3>${ch.length?`<table class="tbl"><thead><tr><th>Nome</th><th>Tipo</th><th>Nível mínimo</th><th>Estado</th><th></th></tr></thead><tbody>${ch.map(c=>`<tr><td data-l="Nome">${esc(c.name)}</td><td data-l="Tipo">${esc(c.type)}</td><td data-l="Nível mínimo">${lb(c.min_level)}</td><td data-l="Estado">${c.enabled?'<span class="badge b-ok">Ativo</span>':'<span class="badge b-warn">Desativado</span>'}</td><td class="act"><button class="btn ct" data-i="${c.id}">Testar</button> <button class="btn ec" data-i="${c.id}">Editar</button> <button class="btn dng cd" data-i="${c.id}" data-n="${esc(c.name)}">Remover</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum canal configurado. Adicione um abaixo para receber alertas.')}
+ <h3 id="ctit">${ec?'Editar canal '+esc(ec.name):'Adicionar canal'}</h3><form id="cf"><div class="row">${campo('Nome','<input type="text" name="name" required>')}${campo('Tipo',`<select name="type" id="ctype"><option value="webhook">Webhook</option><option value="telegram">Telegram</option><option value="email">E-mail</option></select>`)}
  ${campo('Nível mínimo',`<select name="min_level"><option value="warning">Alerta</option><option value="info">Info</option><option value="critical">Crítico</option></select>`)}</div>
- ${campo('Configuração (JSON)',`<textarea name="config" id="cconf" required spellcheck="false">${ex.webhook}</textarea>`)}<button class="btn pri" style="margin-top:12px">Adicionar canal</button></form></section>`;
- $('#ctype').onchange=e=>$('#cconf').value=ex[e.target.value];
+ <label class="chk"><input type="checkbox" name="enabled" ${!ec||ec.enabled?'checked':''}> Canal ativo</label>
+ ${campo(ec?'Configuração (JSON) — opcional':'Configuração (JSON)',`<textarea name="config" id="cconf" ${ec?'':'required'} spellcheck="false" placeholder='${ec?'Em branco = manter a configuração atual. Para mudar, informe só os campos alterados, ex.: {"chat_id":"@outro_canal"}':''}'>${ec?'':ex.webhook}</textarea>`)}
+ <div class="row" style="margin-top:12px"><button class="btn pri">${ec?'Salvar alterações':'Adicionar canal'}</button>${ec?'<button type="button" class="btn" id="ccan">Cancelar edição</button>':''}</div></form></section>`;
+ if(!ec)$('#ctype').onchange=e=>$('#cconf').value=ex[e.target.value];
  $('#sf').onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));for(const k in o)o[k]=+o[k];await api('/settings',{method:'PUT',body:o});toast('Parâmetros salvos.','ok')};
- $('#cf').onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));try{o.config=JSON.parse(o.config)}catch{return toast('A configuração não é um JSON válido.','erro')}await api('/channels',{method:'POST',body:o});toast('Canal adicionado.','ok');views.settings()};
+ if(ec){const f=$('#cf').elements;f.name.value=ec.name;f.type.value=ec.type;f.type.disabled=true;f.min_level.value=ec.min_level;
+  $('#ccan').onclick=()=>{editCh=null;views.settings()};$('#cf').scrollIntoView()}
+ document.querySelectorAll('.ec').forEach(b=>b.onclick=()=>{editCh=+b.dataset.i;views.settings()});
+ $('#cf').onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));o.enabled=!!o.enabled;const txt=(o.config||'').trim();
+  if(txt){try{o.config=JSON.parse(txt)}catch{return toast('A configuração não é um JSON válido.','erro')}}else delete o.config;
+  if(ec){delete o.type;await api('/channels/'+ec.id,{method:'PUT',body:o});editCh=null;toast('Canal atualizado.','ok')}else{await api('/channels',{method:'POST',body:o});toast('Canal adicionado.','ok')}views.settings()};
  document.querySelectorAll('.ct').forEach(b=>b.onclick=async()=>{const r=await api(`/channels/${b.dataset.i}/test`,{method:'POST'});toast(r.ok?'Mensagem de teste enviada.':'Falhou: '+r.error,r.ok?'ok':'erro')});
  document.querySelectorAll('.cd').forEach(b=>b.onclick=async()=>{if(await ask(`Remover o canal ${b.dataset.n}?`,'Remover')){await api('/channels/'+b.dataset.i,{method:'DELETE'});views.settings()}})}};
 go();
