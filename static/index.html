@@ -1,92 +1,191 @@
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Central Flussonic</title>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Greentek · Central de Monitoramento</title>
 <style>
-:root{--bg:#f6f7f9;--fg:#1c2330;--card:#fff;--bd:#d9dde5;--ok:#177a3c;--bad:#b3261e;--warn:#b26a00;--mut:#6b7385}
-@media(prefers-color-scheme:dark){:root{--bg:#12151b;--fg:#e6e9ef;--card:#1b2029;--bd:#2c3340;--ok:#4cc27a;--bad:#ff6b61;--warn:#e5a23a;--mut:#9aa3b5}}
-body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--fg)}
-header{display:flex;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--bd);flex-wrap:wrap}
-header h1{font-size:16px;margin:0 12px 0 0}
-nav button{background:none;border:0;color:var(--fg);padding:6px 10px;cursor:pointer;border-radius:6px}
-nav button.on{background:var(--card);border:1px solid var(--bd)}
-main{padding:16px;max-width:1200px;margin:auto}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:12px;overflow-x:auto}
-table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}
-tr.prob td{background:color-mix(in srgb,var(--bad) 14%,transparent)}
-.tag{padding:1px 7px;border-radius:10px;border:1px solid var(--bd);font-size:12px}
-.online,.restart_ok,.recovered,.info{color:var(--ok)}.offline,.critical{color:var(--bad);font-weight:600}.warning{color:var(--warn)}
-input,select,button.a{font:inherit;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--card);color:var(--fg)}
-button.a{cursor:pointer}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}.mut{color:var(--mut)}
-pre{max-height:300px;overflow:auto;background:var(--bg);padding:8px;border-radius:6px}
+:root{
+  --color-brand-green-400:#B7E27F;--color-brand-green-500:#A3D168;--color-brand-green-600:#89B84B;--color-brand-green-700:#6F9839;
+  --color-brand-orange-500:#F58020;
+  --color-neutral-000:#FFFFFF;--color-neutral-300:#A8A8A8;--color-neutral-500:#6F6F6F;--color-neutral-700:#363636;
+  --color-neutral-800:#272727;--color-neutral-900:#1C1C1C;--color-neutral-950:#101010;
+  --color-danger-500:#E15B64;--color-warning-500:#E5B84B;--color-success-500:#7FBF45;--color-info-500:#6AA7C8;
+  --bg-app:var(--color-neutral-950);--bg-surface:var(--color-neutral-900);--bg-surface-2:var(--color-neutral-800);
+  --border:var(--color-neutral-700);--border-focus:var(--color-brand-green-500);
+  --text-primary:#FFFFFF;--text-secondary:#D0D0D0;--text-tertiary:#A8A8A8;--text-disabled:#6A6A6A;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg-app);color:var(--text-primary);overflow-x:hidden}
+:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+h2{font-size:20px;font-weight:600;margin:0 0 12px}
+.mono{font-family:var(--mono);font-size:14px}
+.mut{color:var(--text-tertiary)}
+/* barra superior (celular) e navegação lateral (desktop) */
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--bg-surface);border-bottom:1px solid var(--border)}
+.brand{font-weight:600;font-size:16px;flex:1;min-width:0}
+.brand small{display:block;font-weight:400;font-size:12px;color:var(--text-tertiary)}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px;padding:8px 16px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-primary);font:inherit;cursor:pointer;text-decoration:none;transition:background .15s}
+.btn:hover{background:var(--bg-surface-2)}
+.btn.pri{background:var(--color-brand-green-500);color:var(--color-neutral-900);border-color:var(--color-brand-green-500);font-weight:600}
+.btn.pri:hover{background:var(--color-brand-green-400)}
+.btn.dng{border-color:var(--color-danger-500);color:var(--color-danger-500)}
+.btn:disabled{color:var(--text-disabled);border-color:var(--border);cursor:not-allowed}
+nav#nav{display:none;flex-direction:column;gap:4px;padding:8px 16px;background:var(--bg-surface);border-bottom:1px solid var(--border)}
+nav#nav.open{display:flex}
+nav#nav button{min-height:44px;text-align:left;padding:8px 12px;border-radius:6px;border:1px solid transparent;background:none;color:var(--text-secondary);font:inherit;cursor:pointer}
+nav#nav button[aria-current="page"]{background:var(--bg-surface-2);border-color:var(--border);color:var(--text-primary);box-shadow:inset 3px 0 0 var(--color-brand-green-500)}
+main{padding:16px;max-width:1200px;margin:0 auto;min-width:0}
+footer{padding:16px;color:var(--text-tertiary);font-size:12px;text-align:center}
+/* cartões e formulários */
+.card{background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px}
+.card h3{font-size:16px;margin:0 0 8px;font-weight:600}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:12px}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1 1 100%}
+.fld>span{font-size:14px;color:var(--text-secondary)}
+input[type=text],input[type=url],input[type=password],input[type=number],select,textarea{width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg-surface-2);color:var(--text-primary);font:inherit}
+textarea{font-family:var(--mono);font-size:14px;min-height:88px}
+.chk{display:flex;align-items:center;gap:8px;min-height:44px}
+.chk input{width:24px;height:24px;accent-color:var(--color-brand-green-500)}
+/* selos de estado: sempre texto, nunca só cor */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;border:1px solid currentColor;font-size:12px;font-weight:600;white-space:nowrap}
+.b-ok{color:var(--color-success-500)}.b-bad{color:var(--color-danger-500)}.b-warn{color:var(--color-warning-500)}.b-info{color:var(--color-info-500)}
+.sumario{font-weight:600;padding:8px 12px;border-radius:6px;border:1px solid currentColor;display:inline-block}
+/* tabelas: cartões no celular, tabela a partir de 768 px */
+.tbl{width:100%;border-collapse:collapse}
+.tbl thead{display:none}
+.tbl tr{display:block;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;padding:8px 12px;background:var(--bg-surface-2)}
+.tbl tr.prob{border-color:var(--color-danger-500)}
+.tbl td{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:6px 0;border:0;overflow-wrap:anywhere;text-align:right}
+.tbl td::before{content:attr(data-l);color:var(--text-tertiary);font-size:14px;text-align:left;flex:none}
+.tbl td select{width:auto;max-width:60%}
+.tbl td.full{display:block;text-align:left}.tbl td.full::before{display:block}
+.tbl td.act{justify-content:flex-end;flex-wrap:wrap}.tbl td.act::before{display:none}
+.est{min-width:0;text-align:right}.est .mut{font-size:14px;margin-top:4px}
+.estado{padding:24px;text-align:center;color:var(--text-secondary);border:1px dashed var(--border);border-radius:8px}
+.estado.erro{color:var(--color-danger-500);border-color:var(--color-danger-500)}
+dialog{max-width:min(92vw,440px);width:100%;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);color:var(--text-primary);padding:24px}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog p{margin:0 0 16px;overflow-wrap:anywhere}dialog .row{justify-content:flex-end;margin:0}
+#toast{position:fixed;left:16px;right:16px;bottom:16px;z-index:20;display:none;padding:12px 16px;border-radius:8px;background:var(--bg-surface-2);border:1px solid var(--border);border-left:4px solid var(--color-info-500)}
+#toast.erro{border-left-color:var(--color-danger-500)}#toast.ok{border-left-color:var(--color-success-500)}
+.carga{color:var(--text-tertiary)}
+a{color:var(--color-brand-green-500)}
+@media(min-width:768px){
+  .fld{flex:1 1 200px}
+  .tbl thead{display:table-header-group}
+  .tbl tr{display:table-row;border:0;border-radius:0;margin:0;padding:0;background:none}
+  .tbl th{text-align:left;padding:8px;color:var(--text-tertiary);font-weight:600;font-size:14px;border-bottom:1px solid var(--border)}
+  .tbl td{display:table-cell;padding:8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle}
+  .tbl td::before{display:none}
+  .tbl td select{width:100%;max-width:none}
+  .est{text-align:left}
+  .tbl td.act,.tbl td[data-l=Stream]{white-space:nowrap}
+  .tbl tr.prob td{background:color-mix(in srgb,var(--color-danger-500) 12%,transparent)}
+  #toast{left:auto;max-width:420px}
+}
+@media(min-width:1024px){
+  body{display:grid;grid-template-columns:220px minmax(0,1fr);grid-template-rows:auto 1fr auto;min-height:100vh}
+  .top{grid-column:1/-1;position:static}
+  #menu{display:none}
+  nav#nav{display:flex;grid-row:2;grid-column:1;border-bottom:0;border-right:1px solid var(--border);padding:16px 8px;align-self:stretch}
+  main{grid-row:2;grid-column:2;width:100%}
+  footer{grid-column:1/-1}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style></head><body>
-<header><h1>Central Flussonic</h1><nav id="nav"></nav><span class="mut" id="stamp"></span></header>
-<main id="main"></main>
-<footer class="mut" style="padding:8px 16px">Greentek · versão {{VERSAO}}</footer>
+<header class="top"><button class="btn" id="menu" aria-label="Abrir menu" aria-expanded="false">Menu</button>
+<div class="brand">Greentek<small>Central de monitoramento</small></div><span class="mut mono" id="stamp"></span></header>
+<nav id="nav" aria-label="Seções"></nav>
+<main id="main" aria-live="polite"></main>
+<footer>Greentek Soluções Inteligentes · versão <span class="mono">{{VERSAO}}</span></footer>
+<div id="toast" role="status" aria-live="polite"></div>
+<dialog id="dlg"><p id="dmsg"></p><form method="dialog" class="row"><button class="btn" value="no">Cancelar</button><button class="btn pri" id="dok" value="yes">Confirmar</button></form></dialog>
 <script>
-const TZ='America/Sao_Paulo', $=s=>document.querySelector(s);
+const TZ='America/Sao_Paulo',$=s=>document.querySelector(s);
 const fmt=t=>t?new Date(t).toLocaleString('pt-BR',{timeZone:TZ}):'-';
 const dur=s=>s==null?'-':s<60?Math.round(s)+'s':s<3600?Math.round(s/60)+'min':s<86400?(s/3600).toFixed(1)+'h':Math.floor(s/86400)+'d '+Math.floor(s%86400/3600)+'h';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-async function api(p,o={}){const r=await fetch('/api'+p,{headers:{'Content-Type':'application/json'},...o,body:o.body&&JSON.stringify(o.body)});
- if(!r.ok){alert('Erro: '+(await r.text()));throw 0}return r.status==204?null:r.json()}
+let tt;function toast(m,k){const t=$('#toast');t.textContent=m;t.className=k||'';t.style.display='block';clearTimeout(tt);tt=setTimeout(()=>t.style.display='none',5000)}
+function ask(msg,ok='Confirmar'){return new Promise(r=>{$('#dmsg').textContent=msg;$('#dok').textContent=ok;const d=$('#dlg');d.onclose=()=>r(d.returnValue=='yes');d.showModal()})}
+async function api(p,o={}){let r;try{r=await fetch('/api'+p,{headers:{'Content-Type':'application/json'},...o,body:o.body&&JSON.stringify(o.body)})}catch{toast('Sem conexão com a central. Tente novamente.','erro');throw 0}
+ if(!r.ok){toast('Erro: '+(await r.text()).slice(0,200),'erro');throw 0}return r.status==204?null:r.json()}
+const vazio=m=>`<div class="estado">${m}</div>`;
+const lvl={info:['Info','b-info'],warning:['Alerta','b-warn'],critical:['Crítico','b-bad']};
+const lb=l=>{const[x,c]=lvl[l]||[l,'b-info'];return `<span class="badge ${c}">${x}</span>`};
+const stb=s=>s=='online'?'<span class="badge b-ok">Online</span>':s=='offline'?'<span class="badge b-bad">Offline</span>':'<span class="badge b-info">Aguardando coleta</span>';
 const tabs={overview:'Visão geral',servers:'Servidores',events:'Eventos',snaps:'Evidências',settings:'Configurações'};
+const rot={poll_interval_s:'Intervalo de coleta (s)',request_timeout_s:'Tempo limite por requisição (s)',concurrency:'Servidores em paralelo',delay_threshold_s:'Atraso máximo aceito (s)',persistence_checks:'Verificações seguidas para alertar',min_restart_interval_s:'Intervalo mínimo entre reinícios (s)',max_restarts_per_window:'Reinícios máximos por janela',restart_window_s:'Janela de reinícios (s)',verify_after_s:'Verificar após reinício (s)'};
 let cur='overview',timer;
 $('#nav').innerHTML=Object.entries(tabs).map(([k,v])=>`<button data-k="${k}">${v}</button>`).join('');
-$('#nav').onclick=e=>{if(e.target.dataset.k){cur=e.target.dataset.k;go()}};
-async function go(){clearInterval(timer);[...$('#nav').children].forEach(b=>b.classList.toggle('on',b.dataset.k==cur));
- await views[cur]();if(cur=='overview')timer=setInterval(views.overview,15000)}
+$('#menu').onclick=()=>{const o=$('#nav').classList.toggle('open');$('#menu').setAttribute('aria-expanded',o)};
+$('#nav').onclick=e=>{if(e.target.dataset.k){cur=e.target.dataset.k;$('#nav').classList.remove('open');$('#menu').setAttribute('aria-expanded',false);go()}};
+async function go(){clearInterval(timer);[...$('#nav').children].forEach(b=>b.dataset.k==cur?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));
+ $('#main').innerHTML='<p class="carga">Carregando…</p>';
+ try{await views[cur]();if(cur=='overview')timer=setInterval(()=>views.overview().catch(()=>{}),15000)}
+ catch{$('#main').innerHTML='<div class="estado erro">Não foi possível carregar esta tela.<br><br><button class="btn" id="rt">Tentar novamente</button></div>';$('#rt').onclick=go}}
 const f={srv:'',state:'',prob:false};
+const campo=(l,inner)=>`<label class="fld"><span>${l}</span>${inner}</label>`;
 const views={
 async overview(){const d=await api(`/overview?only_problems=${f.prob}${f.srv?'&server_id='+f.srv:''}${f.state?'&state='+encodeURIComponent(f.state):''}`);
  const all=await api('/servers');const bad=d.reduce((n,s)=>n+s.streams.filter(x=>x.problem).length,0);
- $('#stamp').textContent='Atualizado '+fmt(new Date());
- $('#main').innerHTML=`<div class="row"><select id="fs"><option value="">Todos os servidores</option>${all.map(s=>`<option value="${s.id}" ${f.srv==s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
- <input id="fst" placeholder="estado (ex.: error)" value="${esc(f.state)}"><label><input type="checkbox" id="fp" ${f.prob?'checked':''}> só com problema</label>
- <b class="${bad?'critical':'online'}">${bad} stream(s) com problema</b></div>`+d.map(s=>`<div class="card"><b>${esc(s.name)}</b>
- <span class="tag ${s.status}">${s.status}</span> <span class="mut">${esc(Object.values(s.tags).join(' · '))} v${esc(s.version||'?')} ${s.adapter_used?'['+s.adapter_used+']':''} ${s.status=='offline'?esc(s.last_error||''):''}</span>
- <table><tr><th>Stream</th><th>Status</th><th>Bitrate</th><th>Atraso</th><th>Uptime</th><th>Auto</th><th></th></tr>${s.streams.map(x=>`<tr class="${x.problem?'prob':''}">
- <td>${esc(x.name)}</td><td>${esc(x.status||'?')} ${x.problem?`<span class="mut">(${esc(x.reasons.join('; '))}, ${x.bad_count}x)</span>`:''}</td>
- <td>${x.bitrate==null?'n/a':x.bitrate}</td><td>${dur(x.lag_s)}</td><td>${dur(x.uptime_s)}</td>
- <td><select data-s="${s.id}" data-n="${esc(x.name)}" class="as"><option value="">herdar (${x.auto_restart==null?(s.auto_restart?'on':'off'):'—'})</option><option value="1" ${x.auto_restart===1?'selected':''}>on</option><option value="0" ${x.auto_restart===0?'selected':''}>off</option></select></td>
- <td><button class="a rs" data-s="${s.id}" data-n="${esc(x.name)}">Reiniciar</button></td></tr>`).join('')}</table></div>`).join('');
+ $('#stamp').textContent=fmt(new Date());
+ const foco=document.activeElement&&document.activeElement.id;
+ $('#main').innerHTML=`<h2>Visão geral</h2><div class="row">${campo('Servidor',`<select id="fs"><option value="">Todos os servidores</option>${all.map(s=>`<option value="${s.id}" ${f.srv==s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>`)}
+ ${campo('Estado do stream',`<input type="text" id="fst" placeholder="ex.: error" value="${esc(f.state)}" autocomplete="off">`)}
+ <label class="chk"><input type="checkbox" id="fp" ${f.prob?'checked':''}> Só com problema</label></div>
+ <p><span class="sumario ${bad?'b-bad':'b-ok'}">${bad?bad+' stream(s) com problema':'Nenhum stream com problema'}</span></p>`+
+ (d.length?d.map(s=>`<section class="card"><h3>${esc(s.name)} ${stb(s.status)}</h3>
+ <p class="mut">${esc(Object.values(s.tags).join(' · '))} · versão <span class="mono">${esc(s.version||'?')}</span> · reinício automático do servidor: ${s.auto_restart?'ligado':'desligado'} ${s.status=='offline'?'· '+esc(s.last_error||''):''}</p>
+ ${s.streams.length?`<table class="tbl"><thead><tr><th>Stream</th><th>Estado</th><th>Bitrate</th><th>Atraso</th><th>Tempo ativo</th><th>Reinício automático</th><th></th></tr></thead><tbody>${s.streams.map(x=>`<tr class="${x.problem?'prob':''}">
+ <td data-l="Stream" class="mono">${esc(x.name)}</td>
+ <td data-l="Estado"><div class="est">${x.problem?'<span class="badge b-bad">Problema</span> ':'<span class="badge b-ok">Normal</span> '}<span class="mono">${esc(x.status||'?')}</span>${x.problem?`<div class="mut">${esc(x.reasons.join('; '))} (${x.bad_count}x)</div>`:''}</div></td>
+ <td data-l="Bitrate" class="mono">${x.bitrate==null?'n/d':x.bitrate}</td><td data-l="Atraso" class="mono">${dur(x.lag_s)}</td><td data-l="Tempo ativo" class="mono">${dur(x.uptime_s)}</td>
+ <td data-l="Reinício automático"><select aria-label="Reinício automático do stream ${esc(x.name)}" data-s="${s.id}" data-n="${esc(x.name)}" class="as"><option value="">Herdar</option><option value="1" ${x.auto_restart===1?'selected':''}>Ligado</option><option value="0" ${x.auto_restart===0?'selected':''}>Desligado</option></select></td>
+ <td class="act"><button class="btn rs" data-s="${s.id}" data-sn="${esc(s.name)}" data-n="${esc(x.name)}">Reiniciar</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum stream encontrado neste servidor com os filtros atuais.')}</section>`).join(''):vazio('Nenhum servidor para mostrar. Cadastre um em <b>Servidores</b> ou ajuste os filtros.'));
  $('#fs').onchange=e=>{f.srv=e.target.value;views.overview()};$('#fst').onchange=e=>{f.state=e.target.value;views.overview()};$('#fp').onchange=e=>{f.prob=e.target.checked;views.overview()};
- document.querySelectorAll('.rs').forEach(b=>b.onclick=async()=>{if(confirm('Reiniciar '+b.dataset.n+'?')){const r=await api('/streams/restart',{method:'POST',body:{server_id:+b.dataset.s,name:b.dataset.n}});alert(r.ok?'Reinício enviado':'Falhou (veja Eventos)');views.overview()}});
- document.querySelectorAll('.as').forEach(b=>b.onchange=()=>api('/streams/settings',{method:'PUT',body:{server_id:+b.dataset.s,name:b.dataset.n,auto_restart:b.value===''?null:b.value=='1'}}))},
+ if(foco&&$('#'+foco))$('#'+foco).focus();
+ document.querySelectorAll('.rs').forEach(b=>b.onclick=async()=>{if(await ask(`Reiniciar o stream ${b.dataset.n} do servidor ${b.dataset.sn}? Os espectadores serão interrompidos por instantes.`,'Reiniciar')){const r=await api('/streams/restart',{method:'POST',body:{server_id:+b.dataset.s,name:b.dataset.n}});toast(r.ok?'Reinício enviado.':'Falhou. Veja a aba Eventos.',r.ok?'ok':'erro');views.overview()}});
+ document.querySelectorAll('.as').forEach(b=>b.onchange=()=>api('/streams/settings',{method:'PUT',body:{server_id:+b.dataset.s,name:b.dataset.n,auto_restart:b.value===''?null:b.value=='1'}}).then(()=>toast('Salvo.','ok')))},
 async servers(){const d=await api('/servers');
- $('#main').innerHTML=`<div class="card"><b>Adicionar servidor</b><form id="nf" class="row">
- <input name="name" placeholder="Nome" required><input name="base_url" placeholder="http://ip:8080" required size="28">
- <select name="auth_type"><option>basic</option><option>bearer</option><option>none</option></select>
- <input name="username" placeholder="usuário"><input name="password" type="password" placeholder="senha/token" autocomplete="new-password">
- <select name="adapter"><option>auto</option><option>v3</option><option>legacy</option></select>
- <input name="hotel" placeholder="hotel"><input name="cidade" placeholder="cidade">
- <label><input type="checkbox" name="auto_restart"> reinício automático</label><label><input type="checkbox" name="verify_tls" checked> verificar TLS</label>
- <button class="a">Salvar</button></form></div>
- <div class="card"><table><tr><th>Nome</th><th>URL</th><th>Status</th><th>Versão</th><th>Auto-restart</th><th>Última coleta</th><th></th></tr>${d.map(s=>`<tr><td>${esc(s.name)} <span class="mut">${esc(Object.values(s.tags).join(' · '))}</span></td><td>${esc(s.base_url)}</td>
- <td class="${s.status}">${s.status}</td><td>${esc(s.version||'?')}</td><td><input type="checkbox" class="ar" data-i="${s.id}" ${s.auto_restart?'checked':''}></td><td>${fmt(s.last_poll)}</td>
- <td><button class="a t" data-i="${s.id}">Testar</button> <button class="a d" data-i="${s.id}">Remover</button></td></tr>`).join('')}</table></div>`;
+ $('#main').innerHTML=`<h2>Servidores</h2><section class="card"><h3>Adicionar servidor</h3><form id="nf"><div class="row">
+ ${campo('Nome',`<input type="text" name="name" required>`)}${campo('Endereço (URL)',`<input type="url" name="base_url" placeholder="http://ip:8080" inputmode="url" required>`)}</div><div class="row">
+ ${campo('Autenticação',`<select name="auth_type"><option value="basic">Usuário e senha</option><option value="bearer">Token</option><option value="none">Nenhuma</option></select>`)}
+ ${campo('Usuário',`<input type="text" name="username" autocomplete="off">`)}${campo('Senha ou token',`<input type="password" name="password" autocomplete="new-password">`)}</div><div class="row">
+ ${campo('Tipo de API',`<select name="adapter"><option value="auto">Automático</option><option value="v3">v3</option><option value="legacy">Antiga</option></select>`)}
+ ${campo('Hotel',`<input type="text" name="hotel">`)}${campo('Cidade',`<input type="text" name="cidade">`)}</div>
+ <label class="chk"><input type="checkbox" name="auto_restart"> Reinício automático</label><label class="chk"><input type="checkbox" name="verify_tls" checked> Verificar certificado TLS</label>
+ <button class="btn pri">Salvar servidor</button></form></section>
+ <section class="card">${d.length?`<table class="tbl"><thead><tr><th>Nome</th><th>Endereço</th><th>Estado</th><th>Versão</th><th>Reinício automático</th><th>Última coleta</th><th></th></tr></thead><tbody>${d.map(s=>`<tr>
+ <td data-l="Nome">${esc(s.name)}<br><span class="mut">${esc(Object.values(s.tags).join(' · '))}</span></td><td data-l="Endereço" class="mono">${esc(s.base_url)}</td>
+ <td data-l="Estado">${stb(s.status)}</td><td data-l="Versão" class="mono">${esc(s.version||'?')}</td>
+ <td data-l="Reinício automático"><label class="chk"><input type="checkbox" class="ar" data-i="${s.id}" aria-label="Reinício automático de ${esc(s.name)}" ${s.auto_restart?'checked':''}></label></td><td data-l="Última coleta">${fmt(s.last_poll)}</td>
+ <td class="act"><button class="btn t" data-i="${s.id}">Testar</button> <button class="btn dng d" data-i="${s.id}" data-n="${esc(s.name)}">Remover</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum servidor cadastrado. Preencha o formulário acima para adicionar o primeiro.')}</section>`;
  $('#nf').onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));const b={name:o.name,base_url:o.base_url,auth_type:o.auth_type,username:o.username,password:o.password,adapter:o.adapter,
-  tags:Object.fromEntries(['hotel','cidade'].filter(k=>o[k]).map(k=>[k,o[k]])),auto_restart:!!o.auto_restart,verify_tls:!!o.verify_tls};await api('/servers',{method:'POST',body:b});views.servers()};
- document.querySelectorAll('.t').forEach(b=>b.onclick=async()=>{b.textContent='...';const r=await api(`/servers/${b.dataset.i}/test`,{method:'POST'});alert(r.ok?`OK: perfil ${r.profile}, ${r.streams} streams, versão ${r.version||'?'}`:'Falha: '+r.error);b.textContent='Testar'});
- document.querySelectorAll('.d').forEach(b=>b.onclick=async()=>{if(confirm('Remover servidor?')){await api('/servers/'+b.dataset.i,{method:'DELETE'});views.servers()}});
- document.querySelectorAll('.ar').forEach(b=>b.onchange=async()=>{const s=d.find(x=>x.id==b.dataset.i);await api('/servers/'+s.id,{method:'PUT',body:{...s,auto_restart:b.checked}})})},
+  tags:Object.fromEntries(['hotel','cidade'].filter(k=>o[k]).map(k=>[k,o[k]])),auto_restart:!!o.auto_restart,verify_tls:!!o.verify_tls};await api('/servers',{method:'POST',body:b});toast('Servidor salvo.','ok');views.servers()};
+ document.querySelectorAll('.t').forEach(b=>b.onclick=async()=>{b.textContent='Testando…';b.disabled=true;try{const r=await api(`/servers/${b.dataset.i}/test`,{method:'POST'});toast(r.ok?`Conexão OK: ${r.streams} streams, versão ${r.version||'?'}.`:'Falha: '+r.error,r.ok?'ok':'erro')}finally{b.textContent='Testar';b.disabled=false}});
+ document.querySelectorAll('.d').forEach(b=>b.onclick=async()=>{if(await ask(`Remover o servidor ${b.dataset.n}? O histórico dele será apagado.`,'Remover')){await api('/servers/'+b.dataset.i,{method:'DELETE'});views.servers()}});
+ document.querySelectorAll('.ar').forEach(b=>b.onchange=async()=>{const s=d.find(x=>x.id==b.dataset.i);await api('/servers/'+s.id,{method:'PUT',body:{...s,auto_restart:b.checked}});toast('Salvo.','ok')})},
 async events(){const q=new URLSearchParams(location.hash.slice(1));const srv=await api('/servers');
  const d=await api('/events?limit=300'+['server_id','stream','level','kind'].map(k=>q.get(k)?`&${k}=${encodeURIComponent(q.get(k))}`:'').join(''));
- $('#main').innerHTML=`<div class="row"><select id="es"><option value="">Servidor</option>${srv.map(s=>`<option value="${s.id}" ${q.get('server_id')==s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
- <input id="est" placeholder="stream" value="${esc(q.get('stream')||'')}"><select id="el"><option value="">Nível</option><option>info</option><option>warning</option><option>critical</option></select>
- <input id="ek" placeholder="tipo (ex.: auto_restart)" value="${esc(q.get('kind')||'')}"><button class="a" id="eb">Filtrar</button></div>
- <div class="card"><table><tr><th>Quando (BRT)</th><th>Nível</th><th>Servidor</th><th>Stream</th><th>Tipo</th><th>Mensagem</th></tr>${d.map(e=>`<tr><td>${fmt(e.ts)}</td><td class="${e.level}">${e.level}</td><td>${esc(e.server_name||'')}</td><td>${esc(e.stream||'')}</td><td>${e.kind}</td><td style="white-space:normal">${esc(e.message)}</td></tr>`).join('')}</table></div>`;
+ $('#main').innerHTML=`<h2>Eventos</h2><div class="row">${campo('Servidor',`<select id="es"><option value="">Todos</option>${srv.map(s=>`<option value="${s.id}" ${q.get('server_id')==s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>`)}
+ ${campo('Stream',`<input type="text" id="est" value="${esc(q.get('stream')||'')}">`)}
+ ${campo('Nível',`<select id="el"><option value="">Todos</option>${['info','warning','critical'].map(l=>`<option value="${l}" ${q.get('level')==l?'selected':''}>${lvl[l][0]}</option>`).join('')}</select>`)}
+ ${campo('Tipo',`<input type="text" id="ek" placeholder="ex.: auto_restart" value="${esc(q.get('kind')||'')}">`)}<button class="btn pri" id="eb">Filtrar</button></div>
+ <section class="card">${d.length?`<table class="tbl"><thead><tr><th>Quando (Brasília)</th><th>Nível</th><th>Servidor</th><th>Stream</th><th>Tipo</th><th>Mensagem</th></tr></thead><tbody>${d.map(e=>`<tr><td data-l="Quando" class="mono">${fmt(e.ts)}</td><td data-l="Nível">${lb(e.level)}</td><td data-l="Servidor">${esc(e.server_name||'-')}</td><td data-l="Stream" class="mono">${esc(e.stream||'-')}</td><td data-l="Tipo" class="mono">${esc(e.kind)}</td><td data-l="Mensagem" class="full">${esc(e.message)}</td></tr>`).join('')}</tbody></table>`:vazio('Nenhum evento com esses filtros.')}</section>`;
  $('#eb').onclick=()=>{const p=new URLSearchParams();[['server_id','#es'],['stream','#est'],['level','#el'],['kind','#ek']].forEach(([k,s])=>$(s).value&&p.set(k,$(s).value));location.hash=p.toString();views.events()}},
 async snaps(){const d=await api('/snapshots');
- $('#main').innerHTML=`<p class="mut">JSON bruto da API de cada stream, salvo imediatamente antes de cada reinício. Use para análise e para abrir chamado no suporte Flussonic.</p><div class="card"><table><tr><th>Quando (BRT)</th><th>Servidor</th><th>Stream</th><th>Motivo</th><th></th></tr>${d.map(s=>`<tr><td>${fmt(s.ts)}</td><td>${esc(s.server_name)}</td><td>${esc(s.stream)}</td><td>${esc(s.reason)}</td><td><a href="/api/snapshots/${s.id}?download=true">baixar JSON</a></td></tr>`).join('')}</table></div>`},
+ $('#main').innerHTML=`<h2>Evidências</h2><p class="mut">Dados brutos de cada stream, salvos imediatamente antes de cada reinício, com tokens e senhas mascarados. Use para análise e para abrir chamado no suporte do fabricante.</p><section class="card">${d.length?`<table class="tbl"><thead><tr><th>Quando (Brasília)</th><th>Servidor</th><th>Stream</th><th>Motivo</th><th></th></tr></thead><tbody>${d.map(s=>`<tr><td data-l="Quando" class="mono">${fmt(s.ts)}</td><td data-l="Servidor">${esc(s.server_name)}</td><td data-l="Stream" class="mono">${esc(s.stream)}</td><td data-l="Motivo" class="full">${esc(s.reason)}</td><td class="act"><a class="btn" href="/api/snapshots/${s.id}?download=true">Baixar JSON</a></td></tr>`).join('')}</tbody></table>`:vazio('Ainda não há evidências. Elas são salvas automaticamente antes de cada reinício.')}</section>`},
 async settings(){const s=await api('/settings');const ch=await api('/channels');
- $('#main').innerHTML=`<div class="card"><b>Parâmetros</b><form id="sf" class="row">${Object.entries(s).map(([k,v])=>`<label>${k} <input name="${k}" type="number" step="any" value="${v}" style="width:90px"></label>`).join('')}<button class="a">Salvar</button></form></div>
- <div class="card"><b>Canais de notificação</b><table>${ch.map(c=>`<tr><td>${esc(c.name)}</td><td>${c.type}</td><td>${c.min_level}</td><td><button class="a ct" data-i="${c.id}">Testar</button> <button class="a cd" data-i="${c.id}">Remover</button></td></tr>`).join('')}</table>
- <form id="cf" class="row"><input name="name" placeholder="nome" required><select name="type"><option>webhook</option><option>telegram</option><option>email</option></select>
- <input name="config" placeholder='{"url":"https://..."} | {"bot_token":"..","chat_id":".."} | {"host","port","username","password","from","to"}' size="60" required>
- <select name="min_level"><option>warning</option><option>info</option><option>critical</option></select><button class="a">Adicionar</button></form></div>`;
- $('#sf').onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));for(const k in o)o[k]=+o[k];await api('/settings',{method:'PUT',body:o});alert('Salvo')};
- $('#cf').onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));try{o.config=JSON.parse(o.config)}catch{return alert('JSON inválido')}await api('/channels',{method:'POST',body:o});views.settings()};
- document.querySelectorAll('.ct').forEach(b=>b.onclick=async()=>{const r=await api(`/channels/${b.dataset.i}/test`,{method:'POST'});alert(r.ok?'Enviado':'Falhou: '+r.error)});
- document.querySelectorAll('.cd').forEach(b=>b.onclick=async()=>{await api('/channels/'+b.dataset.i,{method:'DELETE'});views.settings()})}};
+ const ex={webhook:'{"url":"https://..."}',telegram:'{"bot_token":"...","chat_id":"..."}',email:'{"host":"","port":587,"username":"","password":"","from":"","to":""}'};
+ $('#main').innerHTML=`<h2>Configurações</h2><section class="card"><h3>Parâmetros</h3><form id="sf"><div class="row">${Object.entries(s).map(([k,v])=>campo(esc(rot[k]||k),`<input type="number" inputmode="decimal" step="any" name="${esc(k)}" value="${esc(v)}">`)).join('')}</div><button class="btn pri">Salvar parâmetros</button></form></section>
+ <section class="card"><h3>Canais de notificação</h3>${ch.length?`<table class="tbl"><thead><tr><th>Nome</th><th>Tipo</th><th>Nível mínimo</th><th></th></tr></thead><tbody>${ch.map(c=>`<tr><td data-l="Nome">${esc(c.name)}</td><td data-l="Tipo">${esc(c.type)}</td><td data-l="Nível mínimo">${lb(c.min_level)}</td><td class="act"><button class="btn ct" data-i="${c.id}">Testar</button> <button class="btn dng cd" data-i="${c.id}" data-n="${esc(c.name)}">Remover</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum canal configurado. Adicione um abaixo para receber alertas.')}
+ <form id="cf"><div class="row">${campo('Nome','<input type="text" name="name" required>')}${campo('Tipo',`<select name="type" id="ctype"><option value="webhook">Webhook</option><option value="telegram">Telegram</option><option value="email">E-mail</option></select>`)}
+ ${campo('Nível mínimo',`<select name="min_level"><option value="warning">Alerta</option><option value="info">Info</option><option value="critical">Crítico</option></select>`)}</div>
+ ${campo('Configuração (JSON)',`<textarea name="config" id="cconf" required spellcheck="false">${ex.webhook}</textarea>`)}<button class="btn pri" style="margin-top:12px">Adicionar canal</button></form></section>`;
+ $('#ctype').onchange=e=>$('#cconf').value=ex[e.target.value];
+ $('#sf').onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));for(const k in o)o[k]=+o[k];await api('/settings',{method:'PUT',body:o});toast('Parâmetros salvos.','ok')};
+ $('#cf').onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData(e.target));try{o.config=JSON.parse(o.config)}catch{return toast('A configuração não é um JSON válido.','erro')}await api('/channels',{method:'POST',body:o});toast('Canal adicionado.','ok');views.settings()};
+ document.querySelectorAll('.ct').forEach(b=>b.onclick=async()=>{const r=await api(`/channels/${b.dataset.i}/test`,{method:'POST'});toast(r.ok?'Mensagem de teste enviada.':'Falhou: '+r.error,r.ok?'ok':'erro')});
+ document.querySelectorAll('.cd').forEach(b=>b.onclick=async()=>{if(await ask(`Remover o canal ${b.dataset.n}?`,'Remover')){await api('/channels/'+b.dataset.i,{method:'DELETE'});views.settings()}})}};
 go();
 </script></body></html>
