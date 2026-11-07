@@ -336,3 +336,25 @@ def test_api_ignorar_stream_tira_da_contagem_de_problemas_e_registra_evento(tmp_
 def test_testes_nunca_usam_o_banco_de_verdade():
     from app import config
     assert "central-testes-" in config.DB_PATH and "central-testes-" in config.DATA_DIR
+
+
+def test_falha_de_notificacao_vira_evento_visivel(monkeypatch):
+    import asyncio
+    from app import notify
+    from app.db import DB
+    import app.main as m
+
+    async def falha(self, ch, ev):
+        return "Telegram recusou (HTTP 429): Too Many Requests"
+    monkeypatch.setattr(notify.Notifier, "send_one", falha)
+
+    async def sem_espera(_):
+        return None
+    monkeypatch.setattr(notify.asyncio, "sleep", sem_espera)
+    db = m.db
+    db.x("DELETE FROM channels"); db.x("DELETE FROM events")
+    db.x("INSERT INTO channels(type,name,config_enc,min_level,enabled) VALUES('telegram','tg','x','warning',1)")
+    ev = {"level": "warning", "kind": "problem", "message": "m", "server_name": "h", "stream": "1", "ts": "t"}
+    asyncio.run(notify.Notifier(db).dispatch(ev))
+    e = db.q("SELECT * FROM events WHERE kind='notify_error'")
+    assert len(e) == 1 and "429" in e[0]["message"] and "tg" in e[0]["message"]

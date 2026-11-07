@@ -66,7 +66,18 @@ class Notifier:
         for ch in self.db.q("SELECT * FROM channels WHERE enabled=1"):
             if LEVELS.get(ev["level"], 0) < LEVELS.get(ch["min_level"], 1):
                 continue
-            await self.send_one(ch, ev)
+            err = await self.send_one(ch, ev)
+            if err:  # uma segunda tentativa cobre falha de rede passageira
+                await asyncio.sleep(2)
+                err = await self.send_one(ch, ev)
+            if err:  # a falha precisa aparecer na tela (antes só ia para o log e o alerta sumia sem rastro)
+                try:
+                    self.db.add_event("info", "notify_error",
+                                      f"Não consegui enviar o alerta pelo canal '{ch['name']}': {err}",
+                                      None, None, {"canal": ch["name"], "evento": ev.get("kind"),
+                                                   "servidor": ev.get("server_name"), "stream": ev.get("stream")})
+                except Exception:
+                    log.exception("falha ao registrar erro de notificação")
 
     async def send_one(self, ch, ev):
         from .crypto import decrypt_obj

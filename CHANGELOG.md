@@ -18,12 +18,19 @@ Mais recente no topo. Formato de cada entrada em `REGRAS.md` (seção 2.3).
 | 0.2.0 | 2026-11-07 | Interface refeita conforme DESIGN.md: tokens Greentek, mobile-first, marca única |
 | 0.1.0 | 2026-11-07 | Versão beta inicial: monitoramento, reinício automático/manual, evidências, versão visível |
 
+## [0.6.1] — 2026-11-07
+**O que:** quando o envio de um alerta falha (Telegram fora do ar, limite de envios, rede), a central tenta de novo uma vez após 2 s e, se falhar, registra o evento `notify_error` em Eventos, com o canal e o motivo.
+**Por quê:** um stream foi reiniciado e nenhum alerta chegou ao Telegram. O erro de envio só ia para o log do serviço e o alerta sumia sem rastro na tela.
+**Arquivos:** `app/notify.py`, `tests/test_monitor.py`, `app/version.py`, `CHANGELOG.md`.
+**Como testar:** `python -m pytest -q` (22 testes); `curl -I http://IP:8000/health` mostra `X-Greentek-Versao: 0.6.1`.
+**Commit:** a preencher na próxima entrada
+
 ## [0.6.0] — 2026-11-07
 **O que:** botão "Ignorar" por stream, com motivo opcional. Stream ignorado continua sendo lido, mas não conta como problema, não alerta/notifica e não é reiniciado automaticamente; aparece com selo "Ignorado", motivo e contador "N ignorado(s)". "Voltar a monitorar" desfaz (alerta volta na hora se o problema persistir). Ações registradas em Eventos. Banco migrado automaticamente (colunas `ignored`, `ignore_note`, `ignored_at`). **Correção de segurança dos testes:** `tests/conftest.py` isola os testes em banco temporário; antes eles usavam `./data/central.db` (o banco real quando rodados no CT) e alguns testes novos apagam servidores.
 **Por quê:** pedido do Maicon: streams com problema persistente, a resolver depois, não devem avisar à toa nem aparecer como erro.
 **Arquivos:** `app/db.py`, `app/monitor.py`, `app/main.py`, `static/index.html`, `tests/test_monitor.py`, `tests/conftest.py`, `DOCUMENTACAO.md`, `app/version.py`, `CHANGELOG.md`.
 **Como testar:** `python -m pytest -q` (21 passam); Visão geral → Ignorar num stream em erro: o contador de problemas cai, aparece "1 ignorado(s)" e o reinício automático para.
-**Commit:** a preencher na próxima entrada.
+**Commit:** efe2cc9.
 
 ## [0.5.0] — 2026-11-07
 **O que:** Visão geral reformulada para muitos servidores: cada servidor vem recolhido, com o contador "N com problema" ao lado do estado Online; resumo no topo (online, offline, aguardando, streams com problema); botões "Expandir os com problema" e "Recolher todos"; servidores com problema aparecem primeiro, depois os offline; estado dos cartões lembrado ao atualizar. Só os cartões abertos são desenhados (tela leve com 75+ servidores).
