@@ -175,3 +175,19 @@ def test_versao_visivel_em_header_health_e_rodape(tmp_path, monkeypatch):
             assert r.headers["X-Greentek-Versao"] == VERSAO
         assert c.get("/health").json()["versao"] == VERSAO
         assert "{{VERSAO}}" not in c.get("/").text
+
+
+def test_telegram_erro_mostra_motivo_sem_vazar_token(monkeypatch):
+    import asyncio, httpx
+    from app import notify
+    TOKEN = "123456:SEGREDO"
+
+    def handler(req):
+        return httpx.Response(403, json={"ok": False, "description": "Forbidden: bot is not a member of the channel chat"})
+    real = httpx.AsyncClient
+    monkeypatch.setattr(notify.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    ch = {"name": "t", "type": "telegram", "config_enc": "x"}
+    monkeypatch.setattr("app.crypto.decrypt_obj", lambda _: {"bot_token": TOKEN, "chat_id": "@canal"})
+    err = asyncio.run(notify.Notifier(None).send_one(ch, {"level": "info", "kind": "test", "message": "m",
+                                                           "server_name": None, "stream": None, "ts": "2026-01-01T00:00:00Z"}))
+    assert "not a member" in err and "SEGREDO" not in err and "403" in err

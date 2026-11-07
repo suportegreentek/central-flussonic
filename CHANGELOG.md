@@ -6,6 +6,7 @@ Mais recente no topo. Formato de cada entrada em `REGRAS.md` (seção 2.3).
 
 | Versão | Data | Resumo |
 |---|---|---|
+| 0.2.5 | 2026-11-07 | Telegram: erro do teste mostra o motivo; assunto do e-mail com marca Greentek |
 | 0.2.4 | 2026-11-07 | Correção: `app/version.py` tinha sido gravado vazio na 0.2.3 |
 | 0.2.3 | 2026-11-07 | Documentação reorganizada no esquema de capítulos (ATA 100 adaptado) |
 | 0.2.2 | 2026-11-07 | Regra 5 do REGRAS.md esclarecida (marca de terceiros só como referência) |
@@ -13,12 +14,19 @@ Mais recente no topo. Formato de cada entrada em `REGRAS.md` (seção 2.3).
 | 0.2.0 | 2026-11-07 | Interface refeita conforme DESIGN.md: tokens Greentek, mobile-first, marca única |
 | 0.1.0 | 2026-11-07 | Versão beta inicial: monitoramento, reinício automático/manual, evidências, versão visível |
 
+## [0.2.5] — 2026-11-07
+**O que:** quando o Telegram recusa a mensagem, o teste do canal mostra o motivo informado por ele (ex.: "bot is not a member of the channel chat") em vez de só "HTTPStatusError". O token nunca aparece na mensagem. Assunto do e-mail trocado de "[Flussonic]" para "[Greentek]".
+**Por quê:** configurar o bot `greentek_bot` para o canal `@greentek_notifica` e facilitar achar o erro; marca do painel só Greentek.
+**Arquivos:** `app/notify.py`, `tests/test_monitor.py`, `app/version.py`, `CHANGELOG.md`.
+**Como testar:** `python -m pytest -q` (11 passam); na aba Configurações, "Testar" no canal.
+**Commit:** a preencher na próxima entrada.
+
 ## [0.2.4] — 2026-11-07
 **O que:** corrigido `app/version.py`, que ficou vazio na 0.2.3 e impedia a central de iniciar.
 **Por quê:** erro meu ao subir a versão (o arquivo foi aberto para escrita antes de ser lido) e o envio seguiu mesmo com um teste falhando.
 **Arquivos:** `app/version.py`, `CHANGELOG.md`.
 **Como testar:** `python -m pytest -q` (10 passam); `curl -I http://IP:8000/health` mostra `X-Greentek-Versao: 0.2.4`.
-**Commit:** a preencher na próxima entrada.
+**Commit:** 69ac0a4
 
 ## [0.2.3] — 2026-11-07
 **O que:** `DOCUMENTACAO.md` reorganizada em capítulos numerados (00 a 90); esquema registrado no `REGRAS.md` (seção 2.5). Acrescentados instalação no CT, atualização, simulação de stream em erro e referência de parâmetros.

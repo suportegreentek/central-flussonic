@@ -20,13 +20,22 @@ class Webhook:
             (await c.post(self.url, json={"text": _text(ev), "event": ev})).raise_for_status()
 
 
+class NotifyError(Exception):
+    """Erro com mensagem segura para exibir (sem segredos)."""
+
+
 class Telegram:
     def __init__(self, cfg): self.token, self.chat = cfg["bot_token"], cfg["chat_id"]
     async def send(self, ev):
         async with httpx.AsyncClient(timeout=10) as c:
             r = await c.post(f"https://api.telegram.org/bot{self.token}/sendMessage",
                              json={"chat_id": self.chat, "text": _text(ev)})
-            r.raise_for_status()
+            if r.status_code >= 400:  # a descrição do Telegram não contém o token; a URL sim, então não propagamos o erro do httpx
+                try:
+                    desc = r.json().get("description", "")
+                except ValueError:
+                    desc = ""
+                raise NotifyError(f"Telegram recusou (HTTP {r.status_code}): {desc[:150]}")
 
 
 class Email:
@@ -34,7 +43,7 @@ class Email:
     def _send(self, ev):
         c = self.cfg
         m = EmailMessage()
-        m["Subject"] = f"[Flussonic] {ev['level']} - {ev['kind']}"
+        m["Subject"] = f"[Greentek] {ev['level']} - {ev['kind']}"
         m["From"], m["To"] = c["from"], c["to"]
         m.set_content(_text(ev))
         with smtplib.SMTP(c["host"], int(c.get("port", 587)), timeout=15) as s:
@@ -64,6 +73,6 @@ class Notifier:
             await CHANNEL_TYPES[ch["type"]](decrypt_obj(ch["config_enc"])).send(ev)
             return None
         except Exception as e:  # nunca logar a configuração (contém segredos)
-            msg = f"{type(e).__name__}"
+            msg = str(e) if isinstance(e, NotifyError) else f"{type(e).__name__}"
             log.warning("falha ao notificar canal %s: %s", ch["name"], msg)
             return msg
