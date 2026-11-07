@@ -62,6 +62,16 @@ textarea{font-family:var(--mono);font-size:14px;min-height:88px}
 .tbl td.act{justify-content:flex-end;flex-wrap:wrap}.tbl td.act::before{display:none}
 .tit{font-size:14px;white-space:normal;overflow-wrap:anywhere}
 .est{min-width:0;text-align:right}.est .mut{font-size:14px;margin-top:4px}
+.resumo{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.srv{padding:0}.srv-bad{border-color:var(--color-danger-500)}
+.srv-h{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;width:100%;min-height:56px;padding:12px 16px;background:none;border:0;border-radius:8px;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.srv-h:hover{background:var(--bg-surface-2)}
+.srv-n{font-weight:600;flex:1 1 140px;min-width:0;overflow-wrap:anywhere}
+.srv-c{font-size:14px}
+.srv-e{padding:0 16px 12px;font-size:14px;overflow-wrap:anywhere}
+.srv-b{padding:0 16px 16px}.srv-b[hidden]{display:none}
+.chev{width:10px;height:10px;margin-left:auto;border-right:2px solid var(--text-tertiary);border-bottom:2px solid var(--text-tertiary);transform:rotate(45deg);transition:transform .15s}
+.srv-h[aria-expanded=true] .chev{transform:rotate(-135deg)}
 .estado{padding:24px;text-align:center;color:var(--text-secondary);border:1px dashed var(--border);border-radius:8px}
 .estado.erro{color:var(--color-danger-500);border-color:var(--color-danger-500)}
 dialog{max-width:min(92vw,440px);width:100%;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);color:var(--text-primary);padding:24px}
@@ -128,27 +138,41 @@ async function go(){clearInterval(timer);[...$('#nav').children].forEach(b=>b.da
  catch{$('#main').innerHTML='<div class="estado erro">Não foi possível carregar esta tela.<br><br><button class="btn" id="rt">Tentar novamente</button></div>';$('#rt').onclick=go}}
 const f={srv:'',state:'',prob:false};
 const campo=(l,inner)=>`<label class="fld"><span>${l}</span>${inner}</label>`;
-const views={
-async overview(){const d=await api(`/overview?only_problems=${f.prob}${f.srv?'&server_id='+f.srv:''}${f.state?'&state='+encodeURIComponent(f.state):''}`);
- const all=await api('/servers');const bad=d.reduce((n,s)=>n+s.streams.filter(x=>x.problem).length,0);
- $('#stamp').textContent=fmt(new Date());
- const foco=document.activeElement&&document.activeElement.id;
- $('#main').innerHTML=`<h2>Visão geral</h2><div class="row">${campo('Servidor',`<select id="fs"><option value="">Todos os servidores</option>${all.map(s=>`<option value="${s.id}" ${f.srv==s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>`)}
- ${campo('Estado do stream',`<input type="text" id="fst" placeholder="ex.: error" value="${esc(f.state)}" autocomplete="off">`)}
- <label class="chk"><input type="checkbox" id="fp" ${f.prob?'checked':''}> Só com problema</label></div>
- <p><span class="sumario ${bad?'b-bad':'b-ok'}">${bad?bad+' stream(s) com problema':'Nenhum stream com problema'}</span></p>`+
- (d.length?d.map(s=>`<section class="card"><h3>${esc(s.name)} ${stb(s.status)}</h3>
- <p class="mut">${esc(tg(s))} · versão <span class="mono">${esc(s.version||'?')}</span> · reinício automático do servidor: ${s.auto_restart?'ligado':'desligado'} ${s.status=='offline'?'· '+esc(s.last_error||''):''}</p>
- ${s.streams.length?`<table class="tbl"><thead><tr><th>Stream</th><th>Estado</th><th>Bitrate</th><th>Atraso</th><th>Tempo ativo</th><th>Reinício automático</th><th></th></tr></thead><tbody>${s.streams.map(x=>`<tr class="${x.problem?'prob':''}">
+let OV=null;
+const mem=(k,v)=>{try{if(v===undefined)return sessionStorage.getItem(k);sessionStorage.setItem(k,v)}catch{}return null};
+const openSrv=new Set(JSON.parse(mem('ovopen')||'[]'));const saveOpen=()=>mem('ovopen',JSON.stringify([...openSrv]));
+const nprob=s=>s.streams.filter(x=>x.problem).length;
+function streamsTable(s){return s.streams.length?`<table class="tbl"><thead><tr><th>Stream</th><th>Estado</th><th>Bitrate</th><th>Atraso</th><th>Tempo ativo</th><th>Reinício automático</th><th></th></tr></thead><tbody>${s.streams.map(x=>`<tr class="${x.problem?'prob':''}">
  <td data-l="Stream">${stc(x.name,x.title)}</td>
  <td data-l="Estado"><div class="est">${x.problem?'<span class="badge b-bad">Problema</span> ':'<span class="badge b-ok">Normal</span> '}<span class="mono">${esc(x.status||'?')}</span>${x.problem?`<div class="mut">${esc(x.reasons.join('; '))} (${x.bad_count}x)</div>`:''}</div></td>
  <td data-l="Bitrate" class="mono">${x.bitrate==null?'n/d':x.bitrate}</td><td data-l="Atraso" class="mono">${dur(x.lag_s)}</td><td data-l="Tempo ativo" class="mono">${dur(x.uptime_s)}</td>
  <td data-l="Reinício automático"><select aria-label="Reinício automático do stream ${esc(x.name)}" data-s="${s.id}" data-n="${esc(x.name)}" class="as"><option value="">Herdar</option><option value="1" ${x.auto_restart===1?'selected':''}>Ligado</option><option value="0" ${x.auto_restart===0?'selected':''}>Desligado</option></select></td>
- <td class="act"><button class="btn rs" data-s="${s.id}" data-sn="${esc(s.name)}" data-n="${esc(x.name)}" data-t="${esc(x.title||'')}">Reiniciar</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum stream encontrado neste servidor com os filtros atuais.')}</section>`).join(''):vazio('Nenhum servidor para mostrar. Cadastre um em <b>Servidores</b> ou ajuste os filtros.'));
+ <td class="act"><button class="btn rs" data-s="${s.id}" data-sn="${esc(s.name)}" data-n="${esc(x.name)}" data-t="${esc(x.title||'')}">Reiniciar</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum stream encontrado neste servidor com os filtros atuais.')}
+function drawOverview(){const {d,all}=OV;const foco=document.activeElement&&document.activeElement.id;
+ const bad=d.reduce((n,s)=>n+nprob(s),0),on=d.filter(s=>s.status=='online').length,off=d.filter(s=>s.status=='offline').length,wait=d.length-on-off;
+ // com filtro de problema/estado, esconde servidores sem nada a mostrar (offline continua visível: também é problema)
+ const list=d.filter(s=>!(f.prob||f.state)||s.streams.length||s.status=='offline')
+  .sort((a,b)=>nprob(b)-nprob(a)||(b.status=='offline')-(a.status=='offline')||a.name.localeCompare(b.name,'pt-BR')); // com problema, depois offline, depois o resto
+ $('#main').innerHTML=`<h2>Visão geral</h2><div class="row">${campo('Servidor',`<select id="fs"><option value="">Todos os servidores</option>${all.map(s=>`<option value="${s.id}" ${f.srv==s.id?'selected':''}>${esc(s.name)}</option>`).join('')}</select>`)}
+ ${campo('Estado do stream',`<input type="text" id="fst" placeholder="ex.: error" value="${esc(f.state)}" autocomplete="off">`)}
+ <label class="chk"><input type="checkbox" id="fp" ${f.prob?'checked':''}> Só com problema</label></div>
+ <div class="resumo"><span class="sumario b-ok">${on} online</span>${off?`<span class="sumario b-bad">${off} offline</span>`:''}${wait?`<span class="sumario b-info">${wait} aguardando coleta</span>`:''}
+ <span class="sumario ${bad?'b-bad':'b-ok'}">${bad?bad+' stream(s) com problema':'Nenhum stream com problema'}</span></div>
+ <div class="row"><button class="btn" id="expp">Expandir os com problema</button><button class="btn" id="colt">Recolher todos</button></div>`+
+ (list.length?list.map(s=>{const n=nprob(s),op=openSrv.has(s.id);return `<section class="card srv ${n||s.status=='offline'?'srv-bad':''}">
+ <button class="srv-h" id="sh-${s.id}" data-id="${s.id}" aria-expanded="${op}" aria-controls="sb-${s.id}"><span class="srv-n">${esc(s.name)}</span>${stb(s.status)}${n?`<span class="badge b-bad">${n} com problema</span>`:''}${s.status=='online'?`<span class="mut mono srv-c">${s.streams.length} streams</span>`:''}<span class="chev" aria-hidden="true"></span></button>
+ ${s.status=='offline'?`<div class="srv-e mut">${esc(s.last_error||'Sem resposta')}</div>`:''}
+ <div class="srv-b" id="sb-${s.id}" ${op?'':'hidden'}>${op?`<p class="mut">${esc(tg(s))} ${tg(s)?'· ':''}versão <span class="mono">${esc(s.version||'?')}</span> · reinício automático do servidor: ${s.auto_restart?'ligado':'desligado'}</p>${s.status=='online'?streamsTable(s):vazio(s.status=='offline'?'Servidor offline: sem dados de streams até ele voltar a responder.':'Aguardando a primeira coleta deste servidor.')}`:''}</div></section>`}).join(''):vazio('Nenhum servidor para mostrar. Cadastre um em <b>Servidores</b> ou ajuste os filtros.'));
  $('#fs').onchange=e=>{f.srv=e.target.value;views.overview()};$('#fst').onchange=e=>{f.state=e.target.value;views.overview()};$('#fp').onchange=e=>{f.prob=e.target.checked;views.overview()};
+ $('#expp').onclick=()=>{list.filter(s=>nprob(s)).forEach(s=>openSrv.add(s.id));saveOpen();drawOverview()};
+ $('#colt').onclick=()=>{openSrv.clear();saveOpen();drawOverview()};
+ document.querySelectorAll('.srv-h').forEach(b=>b.onclick=()=>{const id=+b.dataset.id;openSrv.has(id)?openSrv.delete(id):openSrv.add(id);saveOpen();drawOverview()});
  if(foco&&$('#'+foco))$('#'+foco).focus();
  document.querySelectorAll('.rs').forEach(b=>b.onclick=async()=>{if(await ask(`Reiniciar o stream ${b.dataset.n}${b.dataset.t?' ('+b.dataset.t+')':''} do servidor ${b.dataset.sn}? Os espectadores serão interrompidos por instantes.`,'Reiniciar')){const r=await api('/streams/restart',{method:'POST',body:{server_id:+b.dataset.s,name:b.dataset.n}});toast(r.ok?'Reinício enviado.':'Falhou. Veja a aba Eventos.',r.ok?'ok':'erro');views.overview()}});
- document.querySelectorAll('.as').forEach(b=>b.onchange=()=>api('/streams/settings',{method:'PUT',body:{server_id:+b.dataset.s,name:b.dataset.n,auto_restart:b.value===''?null:b.value=='1'}}).then(()=>toast('Salvo.','ok')))},
+ document.querySelectorAll('.as').forEach(b=>b.onchange=()=>api('/streams/settings',{method:'PUT',body:{server_id:+b.dataset.s,name:b.dataset.n,auto_restart:b.value===''?null:b.value=='1'}}).then(()=>toast('Salvo.','ok')))}
+const views={
+async overview(){const d=await api(`/overview?only_problems=${f.prob}${f.srv?'&server_id='+f.srv:''}${f.state?'&state='+encodeURIComponent(f.state):''}`);
+ OV={d,all:await api('/servers')};$('#stamp').textContent=fmt(new Date());drawOverview()},
 async servers(){const d=await api('/servers');
  const es=editSrv&&d.find(x=>x.id==editSrv);if(editSrv&&!es)editSrv=null;
  $('#main').innerHTML=`<h2>Servidores</h2>${es?'':`<section class="card"><h3>Importar lista de hotéis</h3>

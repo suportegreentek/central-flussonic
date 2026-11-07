@@ -6,6 +6,7 @@ Mais recente no topo. Formato de cada entrada em `REGRAS.md` (seção 2.3).
 
 | Versão | Data | Resumo |
 |---|---|---|
+| 0.5.0 | 2026-11-07 | Visão geral com servidores recolhidos e contador de problemas |
 | 0.4.0 | 2026-11-07 | Importação de hotéis por CSV; campo Hotel removido (nome = hotel) |
 | 0.3.0 | 2026-11-07 | Editar servidores e canais; título do stream em eventos, evidências e notificações |
 | 0.2.5 | 2026-11-07 | Telegram: erro do teste mostra o motivo; assunto do e-mail com marca Greentek |
@@ -16,12 +17,19 @@ Mais recente no topo. Formato de cada entrada em `REGRAS.md` (seção 2.3).
 | 0.2.0 | 2026-11-07 | Interface refeita conforme DESIGN.md: tokens Greentek, mobile-first, marca única |
 | 0.1.0 | 2026-11-07 | Versão beta inicial: monitoramento, reinício automático/manual, evidências, versão visível |
 
+## [0.5.0] — 2026-11-07
+**O que:** Visão geral reformulada para muitos servidores: cada servidor vem recolhido, com o contador "N com problema" ao lado do estado Online; resumo no topo (online, offline, aguardando, streams com problema); botões "Expandir os com problema" e "Recolher todos"; servidores com problema aparecem primeiro, depois os offline; estado dos cartões lembrado ao atualizar. Só os cartões abertos são desenhados (tela leve com 75+ servidores).
+**Por quê:** pedido do Maicon: com mais de 75 servidores a tela ficava difícil de visualizar.
+**Arquivos:** `static/index.html`, `DOCUMENTACAO.md`, `app/version.py`, `CHANGELOG.md`.
+**Como testar:** abrir a Visão geral com vários servidores e conferir em 360, 768 e 1280 px; `curl -I http://IP:8000/health` mostra `X-Greentek-Versao: 0.5.0`.
+**Commit:** a preencher na próxima entrada.
+
 ## [0.4.0] — 2026-11-07
 **O que:** (1) importação em lote de servidores por planilha CSV, com verificação prévia por linha, modelo para baixar, usuário/senha padrão e proteção contra duplicados; (2) removido o campo "Hotel" do formulário, porque o nome já é o hotel (tags `hotel` antigas ficam ocultas).
 **Por quê:** pedido do Maicon: cadastrar mais de 75 hotéis sem digitar um a um.
 **Arquivos:** `app/importer.py`, `app/main.py`, `static/index.html`, `tests/test_monitor.py`, `DOCUMENTACAO.md`, `app/version.py`, `CHANGELOG.md`.
 **Como testar:** `python -m pytest -q` (18 passam); Servidores → Baixar modelo → preencher → Verificar arquivo → Importar.
-**Commit:** a preencher na próxima entrada.
+**Commit:** 0e86ff7
 
 ## [0.3.0] — 2026-11-07
 **O que:** (1) botão Editar em servidores e em canais de notificação (antes só incluir/remover); canais ganham ativar/desativar e edição parcial da configuração sem expor o token. (2) o título do stream (campo `title` do servidor) passa a aparecer em Eventos, Evidências, Visão geral, no diálogo de reinício e nas mensagens de notificação. Banco migrado automaticamente (colunas novas).

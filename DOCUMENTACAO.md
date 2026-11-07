@@ -117,7 +117,9 @@ Versão atual: ver `app/version.py` (capítulo 05).
 
 **60-2 Telas.** Visão geral, Servidores, Eventos, Evidências, Configurações.
 
-**60-3 Comportamento.** Tabelas viram cartões no celular; status sempre em texto; confirmação antes de reiniciar ou remover; estados de carregando, vazio e erro com mensagem em português.
+**60-3 Visão geral (muitos servidores).** Cada servidor é um cartão **recolhido**: o cabeçalho mostra nome, estado (Online/Offline), o contador "N com problema" ao lado do estado e a quantidade de streams. Clicar no cabeçalho abre a tabela de streams (só os abertos são desenhados). No topo: resumo (online, offline, aguardando coleta, streams com problema) e botões "Expandir os com problema" e "Recolher todos". Ordem: servidores com stream em problema primeiro, depois offline, depois os demais (nome). Servidor offline mostra o motivo sob o cabeçalho. Os cartões abertos são lembrados na sessão do navegador e sobrevivem à atualização automática (15 s). Filtros "Só com problema" e "Estado" escondem servidores sem nada a mostrar, exceto offline.
+
+**60-4 Comportamento.** Tabelas viram cartões no celular; status sempre em texto; confirmação antes de reiniciar ou remover; estados de carregando, vazio e erro com mensagem em português.
 
 ---
 
