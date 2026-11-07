@@ -293,3 +293,46 @@ def test_importar_via_api_verifica_importa_e_ignora_duplicados(tmp_path, monkeyp
         assert r["importados"] == 0 and r["duplicados"] == 4
         assert c.post("/api/servers/import", json={"csv": "x;y\n1;2"}).status_code == 422
         assert "nome;url" in c.get("/api/servers/import-modelo").text
+
+
+def test_stream_ignorado_nao_alerta_nao_reinicia_e_volta_a_alertar_ao_deixar_de_ignorar():
+    a = FakeAdapter([ns("error", 0, 14400, name="25")])
+    db, m, clk = setup(a)
+    async def go():
+        await m.poll_all()                      # cria o registro do stream
+        db.x("UPDATE streams SET ignored=1, ignore_note='fonte fora do ar'")
+        for _ in range(6):
+            clk.adv(31); await m.poll_all()
+    run(go())
+    assert a.restarted == []
+    assert db.q("SELECT 1 FROM events WHERE kind IN ('problem','auto_restart','restart_limit')") == []
+    assert db.one("SELECT problem FROM streams")["problem"] == 1     # continua sendo lido (a realidade fica visível)
+    db.x("UPDATE streams SET ignored=0")
+    run(m.poll_all())                                                 # persistência já cumprida: alerta e reinício voltam
+    assert db.q("SELECT 1 FROM events WHERE kind='problem'") and a.restarted == ["25"]
+
+
+def test_api_ignorar_stream_tira_da_contagem_de_problemas_e_registra_evento(tmp_path, monkeypatch):
+    c, m = _client(tmp_path, monkeypatch)
+    with c:
+        m.db.x("DELETE FROM servers"); m.db.x("DELETE FROM streams")
+        sid = m.db.x("INSERT INTO servers(name,base_url) VALUES('h','http://x')")
+        m.db.x("INSERT INTO streams(server_id,name,problem,reasons,present) VALUES(?,'25',1,'[\"x\"]',1)", (sid,))
+        m.db.x("INSERT INTO streams(server_id,name,problem,reasons,present) VALUES(?,'26',1,'[\"x\"]',1)", (sid,))
+        assert [x["problem"] for x in c.get("/api/overview").json()[0]["streams"]] == [True, True]
+        assert c.put("/api/streams/ignore", json={"server_id": sid, "name": "25", "ignored": True, "note": "  fonte fora  "}).status_code == 200
+        st = {x["name"]: x for x in c.get("/api/overview").json()[0]["streams"]}
+        assert st["25"]["ignored"] == 1 and st["25"]["problem"] is False and st["25"]["problem_real"] is True
+        assert st["25"]["ignore_note"] == "fonte fora" and st["26"]["problem"] is True
+        assert [x["name"] for x in c.get("/api/overview?only_problems=true").json()[0]["streams"]] == ["26"]
+        assert c.get("/api/overview").json()[0]["streams"][0]["name"] == "26"   # ignorado vai para o fim
+        ev = m.db.q("SELECT kind,level,stream FROM events WHERE kind='stream_ignored'")
+        assert ev == [{"kind": "stream_ignored", "level": "info", "stream": "25"}]
+        c.put("/api/streams/ignore", json={"server_id": sid, "name": "25", "ignored": False})
+        assert m.db.one("SELECT ignored,ignore_note FROM streams WHERE name='25'") == {"ignored": 0, "ignore_note": None}
+        assert c.put("/api/streams/ignore", json={"server_id": sid, "name": "zzz", "ignored": True}).status_code == 404
+
+
+def test_testes_nunca_usam_o_banco_de_verdade():
+    from app import config
+    assert "central-testes-" in config.DB_PATH and "central-testes-" in config.DATA_DIR

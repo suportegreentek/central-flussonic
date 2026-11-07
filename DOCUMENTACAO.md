@@ -85,6 +85,12 @@ Versão atual: ver `app/version.py` (capítulo 05).
 
 **30-5 Título do stream.** O campo `title` configurado em cada stream no servidor é lido na coleta e gravado junto ao stream. Eventos, evidências e notificações guardam o título vigente no momento (o histórico não muda se o título for alterado depois). Streams sem título aparecem só com o ID. Eventos anteriores à 0.3.0 não têm título.
 
+**30-6 Ignorar stream.** Para streams com problema persistente já conhecido. Botão "Ignorar" na linha do stream (Visão geral), com motivo opcional (até 200 caracteres). Enquanto ignorado, o stream continua sendo lido e o estado real continua visível, mas:
+- não conta como problema (nem no contador do servidor, nem no resumo, nem no filtro "Só com problema");
+- não gera alerta nem notificação e não é reiniciado automaticamente (o reinício manual continua disponível);
+- aparece com o selo "Ignorado" (azul), o motivo e a contagem "N ignorado(s)" no resumo e no cabeçalho do servidor, para não ser esquecido.
+"Voltar a monitorar" desfaz: se o problema ainda persistir, o alerta sai na hora. Ignorar e voltar a monitorar ficam registrados em Eventos (tipos `stream_ignored` e `stream_unignored`, nível info, que não notifica no nível mínimo padrão). Ignorar é por stream; não existe ignorar o servidor inteiro. O reinício automático desligado (aba/coluna "Reinício automático") **não** silencia alertas: é outra configuração.
+
 **30-4 Parâmetros** (aba Configurações): intervalo de coleta, tempo limite, servidores em paralelo, atraso máximo, verificações seguidas, intervalo mínimo entre reinícios, reinícios por janela, janela, verificação após reinício. Valores-padrão em `app/config.py`.
 
 ---
@@ -135,7 +141,9 @@ Versão atual: ver `app/version.py` (capítulo 05).
 
 ## 80 — Testes e simulação
 
-**80-1 Testes automáticos.** `.venv/bin/python -m pytest -q` (10 testes: detecção, persistência, limites, reinício por versão, mascaramento, criptografia, versão visível).
+**80-1 Testes automáticos.** `.venv/bin/python -m pytest -q` (21 testes: detecção, persistência, limites, reinício por versão, mascaramento, criptografia, versão visível).
+
+**80-1a Isolamento.** `tests/conftest.py` manda o banco e a chave de criptografia dos testes para uma pasta temporária, apagada ao final. Os testes **nunca** tocam em `data/` (o banco de verdade); há um teste que garante isso. Antes da 0.6.0 não era assim: rodar `pytest` dentro de `/opt/central-flussonic` usava o banco real e podia apagar servidores cadastrados.
 
 **80-2 Servidor simulado.** `python tools/fake_flussonic.py --port 9101 --mode v3`. Para simular stream em erro: `curl -X POST 'http://localhost:9101/_sim/ch1?state=error'` (estados: `error`, `lag`, `zero`, `ok`; `&sticky=1` mantém o problema após reiniciar). Cadastrar `http://localhost:9101` na central e acompanhar a aba Eventos.
 

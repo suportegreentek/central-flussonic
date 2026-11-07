@@ -72,6 +72,7 @@ textarea{font-family:var(--mono);font-size:14px;min-height:88px}
 .srv-b{padding:0 16px 16px}.srv-b[hidden]{display:none}
 .chev{width:10px;height:10px;margin-left:auto;border-right:2px solid var(--text-tertiary);border-bottom:2px solid var(--text-tertiary);transform:rotate(45deg);transition:transform .15s}
 .srv-h[aria-expanded=true] .chev{transform:rotate(-135deg)}
+#dnotew{margin:0 0 16px}#dnotew[hidden]{display:none}
 .estado{padding:24px;text-align:center;color:var(--text-secondary);border:1px dashed var(--border);border-radius:8px}
 .estado.erro{color:var(--color-danger-500);border-color:var(--color-danger-500)}
 dialog{max-width:min(92vw,440px);width:100%;border:1px solid var(--border);border-radius:8px;background:var(--bg-surface);color:var(--text-primary);padding:24px}
@@ -110,14 +111,15 @@ a{color:var(--color-brand-green-500)}
 <main id="main" aria-live="polite"></main>
 <footer>Greentek Soluções Inteligentes · versão <span class="mono">{{VERSAO}}</span></footer>
 <div id="toast" role="status" aria-live="polite"></div>
-<dialog id="dlg"><p id="dmsg"></p><form method="dialog" class="row"><button class="btn" value="no">Cancelar</button><button class="btn pri" id="dok" value="yes">Confirmar</button></form></dialog>
+<dialog id="dlg"><p id="dmsg"></p><label class="fld" id="dnotew" hidden><span>Motivo (opcional)</span><input type="text" id="dnote" maxlength="200" placeholder="ex.: fonte fora do ar, aguardando operadora" autocomplete="off"></label><form method="dialog" class="row"><button class="btn" value="no">Cancelar</button><button class="btn pri" id="dok" value="yes">Confirmar</button></form></dialog>
 <script>
 const TZ='America/Sao_Paulo',$=s=>document.querySelector(s);
 const fmt=t=>t?new Date(t).toLocaleString('pt-BR',{timeZone:TZ}):'-';
 const dur=s=>s==null?'-':s<60?Math.round(s)+'s':s<3600?Math.round(s/60)+'min':s<86400?(s/3600).toFixed(1)+'h':Math.floor(s/86400)+'d '+Math.floor(s%86400/3600)+'h';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let tt;function toast(m,k){const t=$('#toast');t.textContent=m;t.className=k||'';t.style.display='block';clearTimeout(tt);tt=setTimeout(()=>t.style.display='none',5000)}
-function ask(msg,ok='Confirmar'){return new Promise(r=>{$('#dmsg').textContent=msg;$('#dok').textContent=ok;const d=$('#dlg');d.onclose=()=>r(d.returnValue=='yes');d.showModal()})}
+function ask(msg,ok='Confirmar',nota=false){return new Promise(r=>{$('#dmsg').textContent=msg;$('#dok').textContent=ok;$('#dnotew').hidden=!nota;$('#dnote').value='';const d=$('#dlg');d.onclose=()=>r(d.returnValue=='yes');d.showModal()})}
+const askNota=async(msg,ok)=>{const sim=await ask(msg,ok,true);return sim?($('#dnote').value||''):null};
 async function api(p,o={}){let r;try{r=await fetch('/api'+p,{headers:{'Content-Type':'application/json'},...o,body:o.body&&JSON.stringify(o.body)})}catch{toast('Sem conexão com a central. Tente novamente.','erro');throw 0}
  if(!r.ok){toast('Erro: '+(await r.text()).slice(0,200),'erro');throw 0}return r.status==204?null:r.json()}
 const stc=(n,t)=>`<div class="est"><span class="mono">${esc(n)}</span>${t?`<div class="mut tit">${esc(t)}</div>`:''}</div>`;
@@ -141,15 +143,15 @@ const campo=(l,inner)=>`<label class="fld"><span>${l}</span>${inner}</label>`;
 let OV=null;
 const mem=(k,v)=>{try{if(v===undefined)return sessionStorage.getItem(k);sessionStorage.setItem(k,v)}catch{}return null};
 const openSrv=new Set(JSON.parse(mem('ovopen')||'[]'));const saveOpen=()=>mem('ovopen',JSON.stringify([...openSrv]));
-const nprob=s=>s.streams.filter(x=>x.problem).length;
+const nprob=s=>s.streams.filter(x=>x.problem).length,nign=s=>s.streams.filter(x=>x.ignored).length;
 function streamsTable(s){return s.streams.length?`<table class="tbl"><thead><tr><th>Stream</th><th>Estado</th><th>Bitrate</th><th>Atraso</th><th>Tempo ativo</th><th>Reinício automático</th><th></th></tr></thead><tbody>${s.streams.map(x=>`<tr class="${x.problem?'prob':''}">
  <td data-l="Stream">${stc(x.name,x.title)}</td>
- <td data-l="Estado"><div class="est">${x.problem?'<span class="badge b-bad">Problema</span> ':'<span class="badge b-ok">Normal</span> '}<span class="mono">${esc(x.status||'?')}</span>${x.problem?`<div class="mut">${esc(x.reasons.join('; '))} (${x.bad_count}x)</div>`:''}</div></td>
+ <td data-l="Estado"><div class="est">${x.ignored?'<span class="badge b-info">Ignorado</span> ':x.problem?'<span class="badge b-bad">Problema</span> ':'<span class="badge b-ok">Normal</span> '}<span class="mono">${esc(x.status||'?')}</span>${x.problem_real?`<div class="mut">${esc(x.reasons.join('; '))} (${x.bad_count}x)</div>`:''}${x.ignored&&x.ignore_note?`<div class="mut">Motivo: ${esc(x.ignore_note)}</div>`:''}</div></td>
  <td data-l="Bitrate" class="mono">${x.bitrate==null?'n/d':x.bitrate}</td><td data-l="Atraso" class="mono">${dur(x.lag_s)}</td><td data-l="Tempo ativo" class="mono">${dur(x.uptime_s)}</td>
  <td data-l="Reinício automático"><select aria-label="Reinício automático do stream ${esc(x.name)}" data-s="${s.id}" data-n="${esc(x.name)}" class="as"><option value="">Herdar</option><option value="1" ${x.auto_restart===1?'selected':''}>Ligado</option><option value="0" ${x.auto_restart===0?'selected':''}>Desligado</option></select></td>
- <td class="act"><button class="btn rs" data-s="${s.id}" data-sn="${esc(s.name)}" data-n="${esc(x.name)}" data-t="${esc(x.title||'')}">Reiniciar</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum stream encontrado neste servidor com os filtros atuais.')}
+ <td class="act"><button class="btn ig" data-s="${s.id}" data-sn="${esc(s.name)}" data-n="${esc(x.name)}" data-t="${esc(x.title||'')}" data-v="${x.ignored?0:1}">${x.ignored?'Voltar a monitorar':'Ignorar'}</button> <button class="btn rs" data-s="${s.id}" data-sn="${esc(s.name)}" data-n="${esc(x.name)}" data-t="${esc(x.title||'')}">Reiniciar</button></td></tr>`).join('')}</tbody></table>`:vazio('Nenhum stream encontrado neste servidor com os filtros atuais.')}
 function drawOverview(){const {d,all}=OV;const foco=document.activeElement&&document.activeElement.id;
- const bad=d.reduce((n,s)=>n+nprob(s),0),on=d.filter(s=>s.status=='online').length,off=d.filter(s=>s.status=='offline').length,wait=d.length-on-off;
+ const bad=d.reduce((n,s)=>n+nprob(s),0),ign=d.reduce((n,s)=>n+nign(s),0),on=d.filter(s=>s.status=='online').length,off=d.filter(s=>s.status=='offline').length,wait=d.length-on-off;
  // com filtro de problema/estado, esconde servidores sem nada a mostrar (offline continua visível: também é problema)
  const list=d.filter(s=>!(f.prob||f.state)||s.streams.length||s.status=='offline')
   .sort((a,b)=>nprob(b)-nprob(a)||(b.status=='offline')-(a.status=='offline')||a.name.localeCompare(b.name,'pt-BR')); // com problema, depois offline, depois o resto
@@ -157,10 +159,10 @@ function drawOverview(){const {d,all}=OV;const foco=document.activeElement&&docu
  ${campo('Estado do stream',`<input type="text" id="fst" placeholder="ex.: error" value="${esc(f.state)}" autocomplete="off">`)}
  <label class="chk"><input type="checkbox" id="fp" ${f.prob?'checked':''}> Só com problema</label></div>
  <div class="resumo"><span class="sumario b-ok">${on} online</span>${off?`<span class="sumario b-bad">${off} offline</span>`:''}${wait?`<span class="sumario b-info">${wait} aguardando coleta</span>`:''}
- <span class="sumario ${bad?'b-bad':'b-ok'}">${bad?bad+' stream(s) com problema':'Nenhum stream com problema'}</span></div>
+ <span class="sumario ${bad?'b-bad':'b-ok'}">${bad?bad+' stream(s) com problema':'Nenhum stream com problema'}</span>${ign?`<span class="sumario b-info">${ign} ignorado(s)</span>`:''}</div>
  <div class="row"><button class="btn" id="expp">Expandir os com problema</button><button class="btn" id="colt">Recolher todos</button></div>`+
  (list.length?list.map(s=>{const n=nprob(s),op=openSrv.has(s.id);return `<section class="card srv ${n||s.status=='offline'?'srv-bad':''}">
- <button class="srv-h" id="sh-${s.id}" data-id="${s.id}" aria-expanded="${op}" aria-controls="sb-${s.id}"><span class="srv-n">${esc(s.name)}</span>${stb(s.status)}${n?`<span class="badge b-bad">${n} com problema</span>`:''}${s.status=='online'?`<span class="mut mono srv-c">${s.streams.length} streams</span>`:''}<span class="chev" aria-hidden="true"></span></button>
+ <button class="srv-h" id="sh-${s.id}" data-id="${s.id}" aria-expanded="${op}" aria-controls="sb-${s.id}"><span class="srv-n">${esc(s.name)}</span>${stb(s.status)}${n?`<span class="badge b-bad">${n} com problema</span>`:''}${nign(s)?`<span class="badge b-info">${nign(s)} ignorado(s)</span>`:''}${s.status=='online'?`<span class="mut mono srv-c">${s.streams.length} streams</span>`:''}<span class="chev" aria-hidden="true"></span></button>
  ${s.status=='offline'?`<div class="srv-e mut">${esc(s.last_error||'Sem resposta')}</div>`:''}
  <div class="srv-b" id="sb-${s.id}" ${op?'':'hidden'}>${op?`<p class="mut">${esc(tg(s))} ${tg(s)?'· ':''}versão <span class="mono">${esc(s.version||'?')}</span> · reinício automático do servidor: ${s.auto_restart?'ligado':'desligado'}</p>${s.status=='online'?streamsTable(s):vazio(s.status=='offline'?'Servidor offline: sem dados de streams até ele voltar a responder.':'Aguardando a primeira coleta deste servidor.')}`:''}</div></section>`}).join(''):vazio('Nenhum servidor para mostrar. Cadastre um em <b>Servidores</b> ou ajuste os filtros.'));
  $('#fs').onchange=e=>{f.srv=e.target.value;views.overview()};$('#fst').onchange=e=>{f.state=e.target.value;views.overview()};$('#fp').onchange=e=>{f.prob=e.target.checked;views.overview()};
@@ -169,6 +171,10 @@ function drawOverview(){const {d,all}=OV;const foco=document.activeElement&&docu
  document.querySelectorAll('.srv-h').forEach(b=>b.onclick=()=>{const id=+b.dataset.id;openSrv.has(id)?openSrv.delete(id):openSrv.add(id);saveOpen();drawOverview()});
  if(foco&&$('#'+foco))$('#'+foco).focus();
  document.querySelectorAll('.rs').forEach(b=>b.onclick=async()=>{if(await ask(`Reiniciar o stream ${b.dataset.n}${b.dataset.t?' ('+b.dataset.t+')':''} do servidor ${b.dataset.sn}? Os espectadores serão interrompidos por instantes.`,'Reiniciar')){const r=await api('/streams/restart',{method:'POST',body:{server_id:+b.dataset.s,name:b.dataset.n}});toast(r.ok?'Reinício enviado.':'Falhou. Veja a aba Eventos.',r.ok?'ok':'erro');views.overview()}});
+ document.querySelectorAll('.ig').forEach(b=>b.onclick=async()=>{const nome=`${b.dataset.n}${b.dataset.t?' ('+b.dataset.t+')':''} do servidor ${b.dataset.sn}`;let nota=null;
+  if(b.dataset.v=='1'){nota=await askNota(`Ignorar o stream ${nome}? Ele continua sendo lido, mas deixa de contar como problema, de enviar alertas e de reiniciar sozinho. Você pode voltar a monitorar quando quiser.`,'Ignorar');if(nota===null)return}
+  else if(!await ask(`Voltar a monitorar o stream ${nome}? Se o problema ainda existir, o alerta volta a sair.`,'Voltar a monitorar'))return;
+  await api('/streams/ignore',{method:'PUT',body:{server_id:+b.dataset.s,name:b.dataset.n,ignored:b.dataset.v=='1',note:nota}});toast(b.dataset.v=='1'?'Stream ignorado.':'Stream voltou a ser monitorado.','ok');views.overview()});
  document.querySelectorAll('.as').forEach(b=>b.onchange=()=>api('/streams/settings',{method:'PUT',body:{server_id:+b.dataset.s,name:b.dataset.n,auto_restart:b.value===''?null:b.value=='1'}}).then(()=>toast('Salvo.','ok')))}
 const views={
 async overview(){const d=await api(`/overview?only_problems=${f.prob}${f.srv?'&server_id='+f.srv:''}${f.state?'&state='+encodeURIComponent(f.state):''}`);

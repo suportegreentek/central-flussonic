@@ -58,9 +58,11 @@ class DB:
                 self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.executescript(SCHEMA)
             # migração: colunas de título do stream (bancos criados antes da 0.3.0)
-            for tbl, col in (("streams", "title"), ("events", "stream_title"), ("snapshots", "stream_title")):
+            for tbl, col, decl in (("streams", "title", "TEXT"), ("events", "stream_title", "TEXT"), ("snapshots", "stream_title", "TEXT"),
+                                   ("streams", "ignored", "INTEGER NOT NULL DEFAULT 0"), ("streams", "ignore_note", "TEXT"),
+                                   ("streams", "ignored_at", "TEXT")):
                 if col not in [r[1] for r in self.conn.execute(f"PRAGMA table_info({tbl})")]:
-                    self.conn.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} TEXT")
+                    self.conn.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {decl}")
             self.conn.commit()
 
     def q(self, sql, args=()):

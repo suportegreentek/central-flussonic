@@ -136,23 +136,29 @@ class Monitor:
         alerted, gave_up = row.get("alerted", 0), row.get("gave_up", 0)
         pending, last_restart = row.get("restart_pending", 0), row.get("last_restart_at")
 
-        # verificação do resultado de um reinício anterior
-        if pending and last_restart:
-            if (now - dbm.parse_iso(last_restart)).total_seconds() >= st["verify_after_s"]:
-                if not problem:
-                    await self.emit("info", "restart_ok", "Stream normalizado após reinício", s, ns.name)
-                else:
-                    await self.emit("warning", "restart_failed", f"Stream continua com problema após reinício: {', '.join(reasons)}", s, ns.name)
-                pending = 0
+        ignored = bool(row.get("ignored"))
+        if ignored:
+            # stream ignorado pelo usuário: continua sendo lido, mas não alerta, não reinicia e não conta como problema.
+            # alerted=0 faz o alerta voltar na hora se a pessoa deixar de ignorar e o problema persistir.
+            pending = alerted = gave_up = 0
+        else:
+            # verificação do resultado de um reinício anterior
+            if pending and last_restart:
+                if (now - dbm.parse_iso(last_restart)).total_seconds() >= st["verify_after_s"]:
+                    if not problem:
+                        await self.emit("info", "restart_ok", "Stream normalizado após reinício", s, ns.name)
+                    else:
+                        await self.emit("warning", "restart_failed", f"Stream continua com problema após reinício: {', '.join(reasons)}", s, ns.name)
+                    pending = 0
 
-        if not problem:
-            if alerted:
-                await self.emit("info", "recovered", "Stream recuperado", s, ns.name)
-            alerted = gave_up = 0
-        elif bad >= st["persistence_checks"] and not alerted:
-            alerted = 1
-            await self.emit("warning", "problem", f"Problema persistente ({bad} verificações): {', '.join(reasons)}", s, ns.name,
-                            {"reasons": reasons})
+            if not problem:
+                if alerted:
+                    await self.emit("info", "recovered", "Stream recuperado", s, ns.name)
+                alerted = gave_up = 0
+            elif bad >= st["persistence_checks"] and not alerted:
+                alerted = 1
+                await self.emit("warning", "problem", f"Problema persistente ({bad} verificações): {', '.join(reasons)}", s, ns.name,
+                                {"reasons": reasons})
 
         self.db.x(
             "INSERT INTO streams(server_id,name,status,bitrate,lag_s,uptime_s,problem,reasons,bad_count,alerted,gave_up,"
@@ -164,7 +170,7 @@ class Monitor:
             (s["id"], ns.name, ns.status, ns.bitrate, ns.lag_s, ns.uptime_s, int(problem), json.dumps(reasons), bad,
              alerted, gave_up, last_restart, pending, json.dumps(ns.raw), dbm.iso(now)))
 
-        if problem and bad >= st["persistence_checks"] and self.auto_enabled(s, row):
+        if problem and not ignored and bad >= st["persistence_checks"] and self.auto_enabled(s, row):
             await self.maybe_restart(s, ns, adapter, st, reasons, last_restart, gave_up)
 
     @staticmethod

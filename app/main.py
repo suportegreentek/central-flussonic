@@ -204,11 +204,14 @@ def overview(server_id: Optional[int] = None, state: Optional[str] = None, only_
     for s in db.q("SELECT * FROM servers ORDER BY name"):
         if server_id and s["id"] != server_id:
             continue
-        rows = db.q("SELECT * FROM streams WHERE server_id=? AND present=1 ORDER BY problem DESC, name", (s["id"],))
+        rows = db.q("SELECT * FROM streams WHERE server_id=? AND present=1", (s["id"],))
         for r in rows:
             r["reasons"] = json.loads(r["reasons"])
             r.pop("raw", None)
             r["auto_restart_effective"] = bool(s["auto_restart"]) if r["auto_restart"] is None else bool(r["auto_restart"])
+            r["problem_real"] = bool(r["problem"])             # o que a coleta viu
+            r["problem"] = bool(r["problem"]) and not r["ignored"]  # o que conta como problema (ignorado não conta)
+        rows.sort(key=lambda r: (not r["problem"], r["name"]))
         if state:
             rows = [r for r in rows if (r["status"] or "") == state]
         if only_problems:
@@ -224,6 +227,25 @@ class StreamRef(BaseModel):
 
 class StreamSetting(StreamRef):
     auto_restart: Optional[bool] = None  # None = herdar do servidor
+
+
+class StreamIgnore(StreamRef):
+    ignored: bool
+    note: Optional[str] = None
+
+
+@api.put("/streams/ignore")
+def stream_ignore(b: StreamIgnore):
+    s = _server(b.server_id)
+    if not db.one("SELECT 1 x FROM streams WHERE server_id=? AND name=?", (b.server_id, b.name)):
+        raise HTTPException(404, "stream não encontrado")
+    note = (b.note or "").strip()[:200] or None
+    db.x("UPDATE streams SET ignored=?, ignore_note=?, ignored_at=? WHERE server_id=? AND name=?",
+         (int(b.ignored), note if b.ignored else None, iso(utcnow()) if b.ignored else None, b.server_id, b.name))
+    db.add_event("info", "stream_ignored" if b.ignored else "stream_unignored",
+                 ("Stream ignorado" + (f": {note}" if note else "")) if b.ignored else "Stream voltou a ser monitorado",
+                 s, b.name)
+    return {"ok": True}
 
 
 @api.post("/streams/restart")
