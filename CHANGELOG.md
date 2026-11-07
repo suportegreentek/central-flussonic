@@ -18,12 +18,19 @@ Mais recente no topo. Formato de cada entrada em `REGRAS.md` (seção 2.3).
 | 0.2.0 | 2026-11-07 | Interface refeita conforme DESIGN.md: tokens Greentek, mobile-first, marca única |
 | 0.1.0 | 2026-11-07 | Versão beta inicial: monitoramento, reinício automático/manual, evidências, versão visível |
 
+## [0.7.1] — 2026-11-07
+**O que:** o selo "Ignorado" e os contadores "N ignorado(s)" (resumo e cabeçalho do servidor) passam de azul para amarelo.
+**Por quê:** stream ignorado precisa de ajuste depois; o amarelo chama a atenção para isso. Pedido do Maicon.
+**Arquivos:** `static/index.html`, `app/version.py`, `CHANGELOG.md`.
+**Como testar:** ignorar um stream na Visão geral e conferir o selo amarelo; `curl -I http://IP:8000/health` mostra `X-Greentek-Versao: 0.7.1`.
+**Commit:** a preencher na próxima entrada
+
 ## [0.7.0] — 2026-11-07
 **O que:** notificações agrupadas: os alertas de cada ciclo saem juntos no fim; mais de 3 do mesmo tipo viram uma mensagem-resumo agrupada por título do stream, com a lista de hotéis. A recuperação do stream (`recovered`) passa a ser avisada.
 **Por quê:** com 70+ hotéis, uma fonte compartilhada que falha geraria dezenas de mensagens. Pedido do Maicon.
 **Arquivos:** `app/notify.py`, `app/monitor.py`, `tests/test_monitor.py`, `DOCUMENTACAO.md`, `app/version.py`, `CHANGELOG.md`.
 **Como testar:** `python -m pytest -q` (23 testes); `curl -I http://IP:8000/health` mostra `X-Greentek-Versao: 0.7.0`.
-**Commit:** a preencher na próxima entrada
+**Commit:** bc031c5
 
 ## [0.6.1] — 2026-11-07
 **O que:** quando o envio de um alerta falha (Telegram fora do ar, limite de envios, rede), a central tenta de novo uma vez após 2 s e, se falhar, registra o evento `notify_error` em Eventos, com o canal e o motivo.
