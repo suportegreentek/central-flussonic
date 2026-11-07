@@ -40,7 +40,7 @@ def set_default(db, port=None, user=None, password=None, clear=False):
 
 def resolve(server, default):
     """Devolve (host, port, user, senha). Usuário+senha do servidor sobrescrevem o par padrão; a porta é independente."""
-    host = urlsplit(server["base_url"]).hostname
+    host = server.get("host") or urlsplit(server["base_url"]).hostname
     port = server.get("ssh_port") or default["port"] or 22
     if server.get("ssh_user") and server.get("ssh_pass_enc"):
         user, enc = server["ssh_user"], server["ssh_pass_enc"]

@@ -268,7 +268,7 @@ def test_importador_formatos_do_excel_e_erros():
     a, b, c, d = rows
     assert a["erro"] is None and a["base_url"] == "http://hotel-a.exemplo.com:7777" and a["username"] == "padrao" and a["cidade"] == "São Paulo"
     assert b["username"] == "proprio" and b["password"] == "segredo"  # a linha vale mais que o padrão
-    assert c["erro"] == "nome em branco" and "url inválida" in d["erro"]
+    assert c["erro"] == "nome em branco" and "protocolo deve ser" in d["erro"]
     rows, _ = importer.parse("nome,url\nH,http://h:1\n")  # vírgula, sem credenciais
     assert "sem usuário/senha" in rows[0]["erro"]
     assert importer.parse("foo;bar\n1;2\n")[1] and importer.parse("")[1]
@@ -292,7 +292,7 @@ def test_importar_via_api_verifica_importa_e_ignora_duplicados(tmp_path, monkeyp
         r = c.post("/api/servers/import", json={**body, "dry_run": False}).json()  # reimportar não duplica
         assert r["importados"] == 0 and r["duplicados"] == 4
         assert c.post("/api/servers/import", json={"csv": "x;y\n1;2"}).status_code == 422
-        assert "nome;url" in c.get("/api/servers/import-modelo").text
+        assert "nome;endereco;porta" in c.get("/api/servers/import-modelo").text
 
 
 def test_stream_ignorado_nao_alerta_nao_reinicia_e_volta_a_alertar_ao_deixar_de_ignorar():
@@ -460,3 +460,57 @@ def test_importar_com_ssh():
     assert rows[0]["ssh_port"] == 2222 and rows[0]["ssh_user"] == "root" and not rows[0]["erro"]
     assert rows[1]["ssh_user"] is None and not rows[1]["erro"]
     assert "porta SSH" in rows[2]["erro"] and "juntos" in rows[3]["erro"]
+
+
+def test_endereco_separado_em_protocolo_host_porta():
+    from app import endpoint as ep
+    assert ep.split("http://1.2.3.4:8080/x") == ("http", "1.2.3.4", 8080)
+    assert ep.split("hotel.com") == (None, "hotel.com", None)
+    assert ep.resolve("hotel.com:7777") == ("http", "hotel.com", 7777, "http://hotel.com:7777")
+    assert ep.resolve("hotel.com", 8443, "https") == ("https", "hotel.com", 8443, "https://hotel.com:8443")
+    assert ep.resolve("http://a.com:1", 2) == ("http", "a.com", 2, "http://a.com:2")   # campo porta vence
+    assert ep.resolve(base_url="https://b.com")[3] == "https://b.com"
+    for ruim in ("", "ftp://x", "a.com:99999", "a b"):
+        try:
+            ep.resolve(ruim); assert False, ruim
+        except ValueError:
+            pass
+
+
+def test_api_servidor_com_campos_separados_e_migracao(tmp_path, monkeypatch):
+    c, m = _client(tmp_path, monkeypatch)
+    with c:
+        m.db.x("DELETE FROM servers")
+        r = c.post("/api/servers", json={"name": "s", "scheme": "https", "host": "h1.exemplo.com", "port": 8443,
+                                         "username": "u", "password": "p"})
+        s = r.json()
+        assert r.status_code == 201 and (s["scheme"], s["host"], s["port"], s["base_url"]) == ("https", "h1.exemplo.com", 8443, "https://h1.exemplo.com:8443")
+        # editar só a porta mantém protocolo e host; porta vazia = padrão
+        e = c.put(f"/api/servers/{s['id']}", json={"name": "s", "auth_type": "basic", "port": 9000}).json()
+        assert (e["scheme"], e["host"], e["port"], e["base_url"]) == ("https", "h1.exemplo.com", 9000, "https://h1.exemplo.com:9000")
+        e = c.put(f"/api/servers/{s['id']}", json={"name": "s", "auth_type": "basic", "scheme": "http", "host": "h1.exemplo.com", "port": None}).json()
+        assert e["base_url"] == "http://h1.exemplo.com" and e["port"] is None
+        assert c.post("/api/servers", json={"name": "x", "host": "a b", "username": "u", "password": "p"}).status_code == 422
+
+
+def test_migracao_separa_url_antiga(tmp_path):
+    from app.db import DB
+    path = str(tmp_path / "velho.db")
+    d = DB(path)
+    d.x("INSERT INTO servers(name,base_url,created_at) VALUES('velho','https://velho.com:7777','2020-01-01T00:00:00Z')")
+    d.x("INSERT INTO servers(name,base_url,created_at) VALUES('semporta','http://10.0.0.5','2020-01-01T00:00:00Z')")
+    d.conn.close()
+    d2 = DB(path)                       # reabrir roda a migração
+    a, b = d2.one("SELECT * FROM servers WHERE name='velho'"), d2.one("SELECT * FROM servers WHERE name='semporta'")
+    assert (a["scheme"], a["host"], a["port"]) == ("https", "velho.com", 7777)
+    assert (b["scheme"], b["host"], b["port"]) == ("http", "10.0.0.5", None)
+
+
+def test_importar_com_porta_e_protocolo_em_colunas():
+    from app import importer
+    rows, err = importer.parse("nome;endereco;porta;protocolo;usuario;senha\n"
+                               "A;1.2.3.4;7777;http;u;p\nB;h.com;8443;https;u;p\nC;h2.com:81;;;u;p\nD;h3.com;abc;;u;p\nE;h4.com;70000;;u;p\n"
+                               "F;h5.com;;ftp;u;p\n")
+    assert err is None
+    assert [(r["scheme"], r["host"], r["port"]) for r in rows[:3]] == [("http", "1.2.3.4", 7777), ("https", "h.com", 8443), ("http", "h2.com", 81)]
+    assert all(r["erro"] for r in rows[3:]) and not any(r["erro"] for r in rows[:3])

@@ -16,7 +16,7 @@ from . import importer
 from .monitor import Monitor
 from .version import VERSAO
 from .notify import CHANNEL_TYPES, Notifier
-from . import ssh as sshm
+from . import ssh as sshm, endpoint
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # URLs/headers fora do log
@@ -56,7 +56,10 @@ api = FastAPI(dependencies=[Depends(require_auth)])  # montado em /api; protegid
 
 class ServerIn(BaseModel):
     name: str
-    base_url: str
+    base_url: Optional[str] = None      # compatibilidade: URL completa (use host/porta/protocolo)
+    scheme: Optional[str] = None        # http | https
+    host: Optional[str] = None          # IP ou nome do servidor
+    port: Optional[int] = None          # porta da API HTTP (vazio = padrão do protocolo)
     auth_type: str = "basic"            # basic | bearer | none
     username: Optional[str] = None
     password: Optional[str] = None      # senha ou token (bearer); omitido na edição = manter
@@ -114,9 +117,18 @@ def _ssh_fields(b: ServerIn, old=None):
     return port, user, enc
 
 
+def _endpoint(b: ServerIn, old=None):
+    """(protocolo, host, porta, base_url) a gravar. Na edição, o que não vier mantém o valor atual."""
+    host, base, scheme, port = b.host, b.base_url, b.scheme, b.port
+    if old and not host and not base:
+        host, port, scheme = old["host"], port if port is not None else old["port"], scheme or old["scheme"]
+    try:
+        return endpoint.resolve(host, port, scheme, base)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
 def _validate(b: ServerIn):
-    if not b.base_url.startswith(("http://", "https://")):
-        raise HTTPException(422, "base_url deve começar com http:// ou https://")
     if b.auth_type not in ("basic", "bearer", "none") or b.adapter not in ("auto", "v3", "legacy"):
         raise HTTPException(422, "auth_type/adapter inválido")
 
@@ -162,20 +174,21 @@ def import_servers(b: ImportIn):
         elif r["name"].lower() in have_names or r["base_url"].lower() in have_urls:
             status, msg = "duplicado", "já cadastrado (mesmo nome ou endereço); ignorado"
         elif not b.dry_run:
-            body = ServerIn(name=r["name"], base_url=r["base_url"], username=r["username"], password=r["password"],
+            body = ServerIn(name=r["name"], host=r["host"], port=r["port"], scheme=r["scheme"], username=r["username"], password=r["password"],
                             adapter=r["adapter"], auto_restart=r["auto_restart"],
                             ssh_port=r["ssh_port"], ssh_user=r["ssh_user"], ssh_password=r["ssh_password"],
                             tags={"cidade": r["cidade"]} if r["cidade"] else {})
             sp, su, se = _ssh_fields(body)
+            esq, host, porta, base = _endpoint(body)
             sid = db.x("INSERT INTO servers(name,base_url,auth_type,credentials_enc,verify_tls,adapter,tags,enabled,auto_restart,created_at,"
-                       "ssh_port,ssh_user,ssh_pass_enc) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                       (body.name, body.base_url, "basic", _creds(body), 1, body.adapter, json.dumps(body.tags), 1,
-                        int(body.auto_restart), iso(utcnow()), sp, su, se))
+                       "ssh_port,ssh_user,ssh_pass_enc,scheme,host,port) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                       (body.name, base, "basic", _creds(body), 1, body.adapter, json.dumps(body.tags), 1,
+                        int(body.auto_restart), iso(utcnow()), sp, su, se, esq, host, porta))
             db.add_event("info", "server_added", "Servidor cadastrado (importação)", _server(sid))
             imported += 1
         if status == "ok":
             have_names.add(r["name"].lower()); have_urls.add(r["base_url"].lower())
-        linhas.append({"line": r["line"], "name": r["name"], "url": r["base_url"] or "", "status": status, "message": msg})
+        linhas.append({"line": r["line"], "name": r["name"], "url": r["base_url"] or "", "host": r["host"], "port": r["port"], "scheme": r["scheme"], "status": status, "message": msg})
     cont = lambda s: sum(1 for x in linhas if x["status"] == s)
     return {"dry_run": b.dry_run, "total": len(linhas), "validos": cont("ok"), "duplicados": cont("duplicado"),
             "erros": cont("erro"), "importados": imported, "linhas": linhas}
@@ -185,10 +198,11 @@ def import_servers(b: ImportIn):
 def add_server(b: ServerIn):
     _validate(b)
     sp, su, se = _ssh_fields(b)
+    esq, host, porta, base = _endpoint(b)
     sid = db.x("INSERT INTO servers(name,base_url,auth_type,credentials_enc,verify_tls,adapter,tags,enabled,auto_restart,created_at,"
-               "ssh_port,ssh_user,ssh_pass_enc) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-               (b.name, b.base_url.rstrip("/"), b.auth_type, _creds(b), int(b.verify_tls), b.adapter, json.dumps(b.tags),
-                int(b.enabled), int(b.auto_restart), iso(utcnow()), sp, su, se))
+               "ssh_port,ssh_user,ssh_pass_enc,scheme,host,port) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+               (b.name, base, b.auth_type, _creds(b), int(b.verify_tls), b.adapter, json.dumps(b.tags),
+                int(b.enabled), int(b.auto_restart), iso(utcnow()), sp, su, se, esq, host, porta))
     db.add_event("info", "server_added", "Servidor cadastrado", _server(sid))
     return public(_server(sid))
 
@@ -198,10 +212,11 @@ def edit_server(sid: int, b: ServerIn):
     old = _server(sid)
     _validate(b)
     sp, su, se = _ssh_fields(b, old)
+    esq, host, porta, base = _endpoint(b, old)
     db.x("UPDATE servers SET name=?,base_url=?,auth_type=?,credentials_enc=?,verify_tls=?,adapter=?,tags=?,enabled=?,"
-         "auto_restart=?,version=NULL,ssh_port=?,ssh_user=?,ssh_pass_enc=? WHERE id=?",
-         (b.name, b.base_url.rstrip("/"), b.auth_type, _creds(b, old), int(b.verify_tls), b.adapter, json.dumps(b.tags),
-          int(b.enabled), int(b.auto_restart), sp, su, se, sid))
+         "auto_restart=?,version=NULL,ssh_port=?,ssh_user=?,ssh_pass_enc=?,scheme=?,host=?,port=? WHERE id=?",
+         (b.name, base, b.auth_type, _creds(b, old), int(b.verify_tls), b.adapter, json.dumps(b.tags),
+          int(b.enabled), int(b.auto_restart), sp, su, se, esq, host, porta, sid))
     return public(_server(sid))
 
 

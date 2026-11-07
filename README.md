@@ -23,7 +23,7 @@ Abra http://SERVIDOR:8000 (usuário `admin`). Dados em `./data` (SQLite + `secre
 - Horários: gravados em UTC, exibidos em America/Sao_Paulo.
 
 ## Adicionar servidores
-Aba **Servidores** → nome, URL base (`http://ip:8080`), autenticação (HTTP Basic; para o reinício funcionar use o
+Aba **Servidores** → nome, protocolo, endereço (IP ou nome) e porta (ex.: 8080), autenticação (HTTP Basic; para o reinício funcionar use o
 usuário de **`edit_auth`**, porque `view_auth` só permite leitura), hotel/cidade → **Testar** (somente leitura) →
 marque "reinício automático" se desejado. O padrão é *desligado*. Por stream, a visão geral permite herdar / ligar / desligar.
 

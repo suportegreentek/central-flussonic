@@ -18,12 +18,19 @@ Mais recente no topo. Formato de cada entrada em `REGRAS.md` (seção 2.3).
 | 0.2.0 | 2026-11-07 | Interface refeita conforme DESIGN.md: tokens Greentek, mobile-first, marca única |
 | 0.1.0 | 2026-11-07 | Versão beta inicial: monitoramento, reinício automático/manual, evidências, versão visível |
 
+## [0.9.0] — 2026-11-07
+**O que:** o endereço do servidor deixa de ser uma URL única e passa a ter três campos: protocolo (http/https), endereço (IP ou nome) e porta. Vale no formulário, na lista (coluna Porta), na API (`scheme`, `host`, `port`) e na importação (colunas `endereco`, `porta`, `protocolo`; a coluna `url` antiga continua aceita). Servidores já cadastrados são migrados automaticamente.
+**Por quê:** pedido do Maicon (porta junto da URL dificultava editar e importar).
+**Arquivos:** `app/endpoint.py` (novo), `app/main.py`, `app/db.py`, `app/importer.py`, `app/ssh.py`, `static/index.html`, `tests/test_monitor.py`, `DOCUMENTACAO.md`, `README.md`, `app/version.py`.
+**Como testar:** `python -m pytest -q` (30 testes); abrir Servidores, editar um e ver protocolo/endereço/porta separados; importar o modelo novo; `curl -I http://IP:8000/health` mostra `X-Greentek-Versao: 0.9.0`.
+**Commit:** a preencher na próxima entrada
+
 ## [0.8.0] — 2026-11-07
 **O que:** acesso SSH por servidor (porta, usuário, senha) e SSH padrão em Configurações; o do servidor sobrescreve o padrão. Na Visão geral, cada servidor ganha "Testar SSH", "Reiniciar serviço Flussonic" e "Reiniciar servidor" (com confirmação). Importação aceita `ssh_porta`, `ssh_usuario`, `ssh_senha`. Senhas SSH criptografadas e nunca devolvidas pela API. Ações e falhas registradas em Eventos.
 **Por quê:** pedido do Maicon, para reiniciar o serviço ou o servidor quando o reinício do stream não resolve.
 **Arquivos:** `app/ssh.py` (novo), `app/main.py`, `app/db.py`, `app/importer.py`, `static/index.html`, `requirements.txt` (asyncssh), `tests/test_monitor.py`, `DOCUMENTACAO.md`, `app/version.py`.
 **Como testar:** `pip install -r requirements.txt` e `python -m pytest -q` (26 testes); em Configurações salvar o SSH padrão; na Visão geral abrir um servidor e usar "Testar SSH"; `curl -I http://IP:8000/health` mostra `X-Greentek-Versao: 0.8.0`.
-**Commit:** a preencher na próxima entrada
+**Commit:** b51937b
 
 ## [0.7.1] — 2026-11-07
 **O que:** o selo "Ignorado" e os contadores "N ignorado(s)" (resumo e cabeçalho do servidor) passam de azul para amarelo.

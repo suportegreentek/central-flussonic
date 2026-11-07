@@ -61,9 +61,18 @@ class DB:
             for tbl, col, decl in (("streams", "title", "TEXT"), ("events", "stream_title", "TEXT"), ("snapshots", "stream_title", "TEXT"),
                                    ("streams", "ignored", "INTEGER NOT NULL DEFAULT 0"), ("streams", "ignore_note", "TEXT"),
                                    ("streams", "ignored_at", "TEXT"),
-                                   ("servers", "ssh_port", "INTEGER"), ("servers", "ssh_user", "TEXT"), ("servers", "ssh_pass_enc", "TEXT")):
+                                   ("servers", "ssh_port", "INTEGER"), ("servers", "ssh_user", "TEXT"), ("servers", "ssh_pass_enc", "TEXT"),
+                                   ("servers", "scheme", "TEXT"), ("servers", "host", "TEXT"), ("servers", "port", "INTEGER")):
                 if col not in [r[1] for r in self.conn.execute(f"PRAGMA table_info({tbl})")]:
                     self.conn.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {decl}")
+            # migração 0.9.0: separa a URL antiga em protocolo, endereço e porta
+            from . import endpoint
+            for r in self.conn.execute("SELECT id, base_url FROM servers WHERE host IS NULL").fetchall():
+                try:
+                    sch, host, port = endpoint.split(r["base_url"])
+                except ValueError:
+                    continue
+                self.conn.execute("UPDATE servers SET scheme=?, host=?, port=? WHERE id=?", (sch or "http", host, port, r["id"]))
             self.conn.commit()
 
     def q(self, sql, args=()):
