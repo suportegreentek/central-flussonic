@@ -60,7 +60,8 @@ class DB:
             # migração: colunas de título do stream (bancos criados antes da 0.3.0)
             for tbl, col, decl in (("streams", "title", "TEXT"), ("events", "stream_title", "TEXT"), ("snapshots", "stream_title", "TEXT"),
                                    ("streams", "ignored", "INTEGER NOT NULL DEFAULT 0"), ("streams", "ignore_note", "TEXT"),
-                                   ("streams", "ignored_at", "TEXT")):
+                                   ("streams", "ignored_at", "TEXT"),
+                                   ("servers", "ssh_port", "INTEGER"), ("servers", "ssh_user", "TEXT"), ("servers", "ssh_pass_enc", "TEXT")):
                 if col not in [r[1] for r in self.conn.execute(f"PRAGMA table_info({tbl})")]:
                     self.conn.execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {decl}")
             self.conn.commit()

@@ -73,6 +73,14 @@ Versão atual: ver `app/version.py` (capítulo 05).
 
 **20-4 Usuários do servidor.** Leitura usa o usuário de visualização; o reinício exige usuário com permissão de escrita (`edit_auth`).
 
+
+**20-6 Acesso SSH (reiniciar serviço ou servidor).** Cada servidor pode ter porta, usuário e senha SSH (formulário de Servidores ou colunas `ssh_porta`, `ssh_usuario`, `ssh_senha` na importação). Em Configurações → "SSH padrão" ficam porta (22), usuário e senha usados pelos servidores sem SSH próprio.
+- Regra: usuário **e** senha do servidor sobrescrevem o par padrão; a porta do servidor, se vazia, usa a padrão. Usuário próprio sem senha é recusado.
+- Senhas criptografadas (Fernet) no banco; nunca voltam pela API, nem aparecem em eventos, logs ou mensagens de erro. A API só informa se há senha (`has_ssh_password`) e se o SSH está utilizável (`ssh_efetivo`).
+- Visão geral, ao abrir um servidor: "Testar SSH", "Reiniciar serviço Flussonic (SSH)" e "Reiniciar servidor (SSH)", sempre com confirmação citando o nome do servidor. Endpoints: `POST /api/servers/{id}/ssh/test|restart-service|reboot`.
+- Comandos (`app/ssh.py`): serviço = `systemctl restart flussonic || service flussonic restart`; servidor = `reboot` em segundo plano após 2 s. Usuário diferente de root usa `sudo -S` com a mesma senha (o usuário precisa estar no sudoers).
+- Cada ação gera evento `ssh_restart_service` ou `ssh_reboot` (alerta); falha gera `ssh_error` (sem senha). O endereço usado é o do `base_url`. Biblioteca: `asyncssh`.
+
 ---
 
 ## 30 — Monitoramento e detecção
@@ -160,4 +168,6 @@ Versão atual: ver `app/version.py` (capítulo 05).
 - Dockerfile e docker-compose nunca foram executados.
 - Canais Telegram e e-mail não foram testados contra serviços reais.
 - `fms_en.pdf` (manual) está no repositório; remover se o repositório for compartilhado.
+- SSH: a identidade (chave) do servidor **não é verificada** (`known_hosts=None`), aceitável em rede interna/VPN; com acesso pela internet, o certo é fixar a chave de cada servidor.
+- SSH: o nome do serviço (`flussonic`) e o uso de `sudo` não foram testados em servidores Flussonic reais, só contra um servidor SSH de teste.
 - O campo "Commit" da última entrada do CHANGELOG só é preenchido na entrada seguinte.

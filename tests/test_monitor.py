@@ -394,3 +394,69 @@ def test_notificacoes_agrupadas_e_recuperacao(monkeypatch):
     n.batching = False
     asyncio.run(n.enqueue(ev(1, "recovered", "info")))
     assert len(enviados) == 1                  # recuperação é avisada mesmo sendo info
+
+
+def test_ssh_padrao_servidor_sobrescreve_e_senha_nunca_vaza(tmp_path, monkeypatch):
+    c, m = _client(tmp_path, monkeypatch)
+    chamadas = []
+
+    async def falso(host, port, user, pw, cmd, timeout=20):
+        chamadas.append((host, port, user, pw, cmd))
+        return 0
+    monkeypatch.setattr(m.sshm, "run", falso)
+    with c:
+        m.db.x("DELETE FROM servers"); m.db.x("DELETE FROM settings WHERE key LIKE 'ssh_default_%'")
+        s1 = c.post("/api/servers", json={"name": "a", "base_url": "http://10.0.0.1:8080", "username": "u", "password": "p"}).json()
+        assert s1["ssh_efetivo"] is False
+        r = c.post(f"/api/servers/{s1['id']}/ssh/reboot")
+        assert r.status_code == 422                                  # sem SSH configurado
+        d = c.put("/api/ssh-padrao", json={"port": 2222, "user": "root", "password": "SEGREDO_PADRAO"}).json()
+        assert d == {"port": 2222, "user": "root", "has_password": True}
+        assert c.post(f"/api/servers/{s1['id']}/ssh/restart-service").json() == {"ok": True}
+        assert chamadas[-1][:4] == ("10.0.0.1", 2222, "root", "SEGREDO_PADRAO") and "systemctl restart flussonic" in chamadas[-1][4]
+        # servidor com SSH próprio sobrescreve usuário, senha e porta
+        s2 = c.post("/api/servers", json={"name": "b", "base_url": "https://h2.exemplo.com", "username": "u", "password": "p",
+                                          "ssh_port": 2200, "ssh_user": "admin", "ssh_password": "SEGREDO_PROPRIO"}).json()
+        c.post(f"/api/servers/{s2['id']}/ssh/reboot")
+        assert chamadas[-1][:4] == ("h2.exemplo.com", 2200, "admin", "SEGREDO_PROPRIO") and "reboot" in chamadas[-1][4]
+        # usuário próprio sem senha é recusado
+        assert c.post("/api/servers", json={"name": "c", "base_url": "http://x:1", "username": "u", "password": "p",
+                                            "ssh_user": "so_usuario"}).status_code == 422
+        # nada de senha nas respostas, no banco em texto puro ou nos eventos
+        corpo = c.get("/api/servers").text + c.get("/api/overview").text + c.get("/api/ssh-padrao").text + c.get("/api/events").text
+        assert "SEGREDO" not in corpo
+        bruto = str(m.db.q("SELECT * FROM servers")) + str(m.db.q("SELECT * FROM settings"))
+        assert "SEGREDO" not in bruto
+        # editar sem mandar os campos SSH mantém tudo; ssh_user "" volta ao padrão
+        c.put(f"/api/servers/{s2['id']}", json={"name": "b2", "base_url": "https://h2.exemplo.com", "auth_type": "basic"})
+        c.post(f"/api/servers/{s2['id']}/ssh/reboot")
+        assert chamadas[-1][2] == "admin"
+        c.put(f"/api/servers/{s2['id']}", json={"name": "b2", "base_url": "https://h2.exemplo.com", "auth_type": "basic", "ssh_user": ""})
+        c.post(f"/api/servers/{s2['id']}/ssh/reboot")
+        assert chamadas[-1][2] == "root"
+        assert {"ssh_reboot", "ssh_restart_service"} <= {e["kind"] for e in m.db.q("SELECT kind FROM events")}
+
+
+def test_ssh_falha_vira_evento_sem_senha(tmp_path, monkeypatch):
+    c, m = _client(tmp_path, monkeypatch)
+
+    async def quebra(*a, **k):
+        raise m.sshm.SSHError("autenticação SSH recusada (usuário ou senha)")
+    monkeypatch.setattr(m.sshm, "run", quebra)
+    with c:
+        sid = c.post("/api/servers", json={"name": "d", "base_url": "http://x:1", "username": "u", "password": "p",
+                                           "ssh_user": "root", "ssh_password": "SEGREDO"}).json()["id"]
+        r = c.post(f"/api/servers/{sid}/ssh/test").json()
+        assert r["ok"] is False and "recusada" in r["error"]
+        assert any(e["kind"] == "ssh_error" for e in m.db.q("SELECT kind FROM events"))
+        assert "SEGREDO" not in str(m.db.q("SELECT * FROM events"))
+
+
+def test_importar_com_ssh():
+    from app import importer
+    rows, err = importer.parse("nome;url;usuario;senha;ssh_porta;ssh_usuario;ssh_senha\n"
+                               "A;a.com:80;u;p;2222;root;x\nB;b.com:80;u;p;;;\nC;c.com:80;u;p;99999;;\nD;d.com:80;u;p;;root;\n")
+    assert err is None
+    assert rows[0]["ssh_port"] == 2222 and rows[0]["ssh_user"] == "root" and not rows[0]["erro"]
+    assert rows[1]["ssh_user"] is None and not rows[1]["erro"]
+    assert "porta SSH" in rows[2]["erro"] and "juntos" in rows[3]["erro"]

@@ -1,7 +1,8 @@
 """Importação de servidores a partir de planilha CSV (Excel > Salvar como CSV).
 
 Colunas (cabeçalho obrigatório, ordem livre, sem diferenciar acento/maiúscula):
-  nome (ou hotel) e url  são obrigatórias;  usuario, senha, cidade, api, reinicio_automatico  são opcionais.
+  nome (ou hotel) e url  são obrigatórias;  usuario, senha, cidade, api, reinicio_automatico,
+  ssh_porta, ssh_usuario, ssh_senha  são opcionais (SSH em branco = usa o padrão das Configurações).
 Separador: vírgula, ponto e vírgula ou tab (detectado). Linhas em branco e iniciadas por # são ignoradas.
 """
 import csv, io, re, unicodedata
@@ -13,6 +14,9 @@ ALIAS = {
     "url": "base_url", "endereco": "base_url", "base_url": "base_url", "ip": "base_url", "host": "base_url",
     "usuario": "username", "user": "username", "username": "username", "login": "username",
     "senha": "password", "password": "password", "pass": "password",
+    "ssh_porta": "ssh_port", "porta_ssh": "ssh_port", "ssh_port": "ssh_port",
+    "ssh_usuario": "ssh_user", "ssh_user": "ssh_user", "usuario_ssh": "ssh_user",
+    "ssh_senha": "ssh_password", "ssh_password": "ssh_password", "senha_ssh": "ssh_password",
     "cidade": "cidade", "city": "cidade",
     "api": "adapter", "tipo_api": "adapter", "adapter": "adapter",
     "reinicio_automatico": "auto_restart", "reinicio": "auto_restart", "auto_restart": "auto_restart",
@@ -63,6 +67,15 @@ def parse(text, default_user=None, default_pass=None):
         item["base_url"] = _url(d.get("base_url"))
         item["username"] = d.get("username") or default_user or ""
         item["password"] = d.get("password") or default_pass or ""
+        item["ssh_user"] = d.get("ssh_user") or None
+        item["ssh_password"] = d.get("ssh_password") or None
+        try:
+            item["ssh_port"] = int(d["ssh_port"]) if d.get("ssh_port") else None
+            if item["ssh_port"] is not None and not 1 <= item["ssh_port"] <= 65535:
+                raise ValueError
+            ssh_ok = True
+        except ValueError:
+            item["ssh_port"], ssh_ok = None, False
         a = _norm(d.get("adapter", "")) or "auto"
         item["adapter"] = {"antiga": "legacy", "legacy": "legacy", "v3": "v3", "auto": "auto", "automatico": "auto"}.get(a)
         item["auto_restart"] = _norm(d.get("auto_restart", "")) in ("sim", "s", "1", "true", "yes", "ligado")
@@ -72,6 +85,10 @@ def parse(text, default_user=None, default_pass=None):
             item["erro"] = "url inválida (use http://endereco:porta)"
         elif not item["adapter"]:
             item["erro"] = "api inválida (use auto, v3 ou antiga)"
+        elif not ssh_ok:
+            item["erro"] = "porta SSH inválida (1 a 65535)"
+        elif bool(item["ssh_user"]) != bool(item["ssh_password"]):
+            item["erro"] = "SSH: informe usuário e senha juntos (ou deixe os dois em branco para usar o padrão)"
         elif not item["username"] or not item["password"]:
             item["erro"] = "sem usuário/senha (informe na linha ou nos campos padrão)"
         out.append(item)

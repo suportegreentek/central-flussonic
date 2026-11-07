@@ -16,6 +16,7 @@ from . import importer
 from .monitor import Monitor
 from .version import VERSAO
 from .notify import CHANNEL_TYPES, Notifier
+from . import ssh as sshm
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # URLs/headers fora do log
@@ -64,11 +65,17 @@ class ServerIn(BaseModel):
     tags: dict = {}
     enabled: bool = True
     auto_restart: bool = False
+    ssh_port: Optional[int] = None      # omitido na edição = manter; vazio/null enviado = usar o padrão
+    ssh_user: Optional[str] = None      # idem ("" = voltar a usar o SSH padrão)
+    ssh_password: Optional[str] = None  # omitido/vazio = manter a atual
 
 
-def public(s):
+def public(s, dflt=None):
     s = dict(s)
     s.pop("credentials_enc", None)
+    enc = s.pop("ssh_pass_enc", None)
+    s["has_ssh_password"] = bool(enc)
+    s["ssh_efetivo"] = sshm.configured({**s, "ssh_pass_enc": enc}, dflt or sshm.get_default(db))
     s["tags"] = json.loads(s["tags"] or "{}")
     return s
 
@@ -84,6 +91,27 @@ def _creds(body: ServerIn, old=None):
     else:
         cur = {}
     return encrypt_obj(cur)
+
+
+def _ssh_fields(b: ServerIn, old=None):
+    """(porta, usuário, senha criptografada) a gravar. Campos omitidos mantêm o valor atual."""
+    sent = getattr(b, "model_fields_set", None) or b.__fields_set__
+    port = old["ssh_port"] if old else None
+    user = old["ssh_user"] if old else None
+    enc = old["ssh_pass_enc"] if old else None
+    if "ssh_port" in sent:
+        port = b.ssh_port or None
+        if port is not None and not 1 <= port <= 65535:
+            raise HTTPException(422, "porta SSH inválida (1 a 65535)")
+    if "ssh_user" in sent:
+        user = (b.ssh_user or "").strip() or None
+        if user is None:
+            enc = None   # sem usuário próprio = volta ao padrão (a senha própria deixa de valer)
+    if b.ssh_password:
+        enc = encrypt_obj({"password": b.ssh_password})
+    if user and not enc:
+        raise HTTPException(422, "informe também a senha SSH deste servidor (ou deixe o usuário em branco para usar o padrão)")
+    return port, user, enc
 
 
 def _validate(b: ServerIn):
@@ -102,7 +130,8 @@ def _server(sid):
 
 @api.get("/servers")
 def list_servers():
-    return [public(s) for s in db.q("SELECT * FROM servers ORDER BY name")]
+    d = sshm.get_default(db)
+    return [public(s, d) for s in db.q("SELECT * FROM servers ORDER BY name")]
 
 
 class ImportIn(BaseModel):
@@ -135,11 +164,13 @@ def import_servers(b: ImportIn):
         elif not b.dry_run:
             body = ServerIn(name=r["name"], base_url=r["base_url"], username=r["username"], password=r["password"],
                             adapter=r["adapter"], auto_restart=r["auto_restart"],
+                            ssh_port=r["ssh_port"], ssh_user=r["ssh_user"], ssh_password=r["ssh_password"],
                             tags={"cidade": r["cidade"]} if r["cidade"] else {})
-            sid = db.x("INSERT INTO servers(name,base_url,auth_type,credentials_enc,verify_tls,adapter,tags,enabled,auto_restart,created_at)"
-                       " VALUES(?,?,?,?,?,?,?,?,?,?)",
+            sp, su, se = _ssh_fields(body)
+            sid = db.x("INSERT INTO servers(name,base_url,auth_type,credentials_enc,verify_tls,adapter,tags,enabled,auto_restart,created_at,"
+                       "ssh_port,ssh_user,ssh_pass_enc) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
                        (body.name, body.base_url, "basic", _creds(body), 1, body.adapter, json.dumps(body.tags), 1,
-                        int(body.auto_restart), iso(utcnow())))
+                        int(body.auto_restart), iso(utcnow()), sp, su, se))
             db.add_event("info", "server_added", "Servidor cadastrado (importação)", _server(sid))
             imported += 1
         if status == "ok":
@@ -153,10 +184,11 @@ def import_servers(b: ImportIn):
 @api.post("/servers", status_code=201)
 def add_server(b: ServerIn):
     _validate(b)
-    sid = db.x("INSERT INTO servers(name,base_url,auth_type,credentials_enc,verify_tls,adapter,tags,enabled,auto_restart,created_at)"
-               " VALUES(?,?,?,?,?,?,?,?,?,?)",
+    sp, su, se = _ssh_fields(b)
+    sid = db.x("INSERT INTO servers(name,base_url,auth_type,credentials_enc,verify_tls,adapter,tags,enabled,auto_restart,created_at,"
+               "ssh_port,ssh_user,ssh_pass_enc) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
                (b.name, b.base_url.rstrip("/"), b.auth_type, _creds(b), int(b.verify_tls), b.adapter, json.dumps(b.tags),
-                int(b.enabled), int(b.auto_restart), iso(utcnow())))
+                int(b.enabled), int(b.auto_restart), iso(utcnow()), sp, su, se))
     db.add_event("info", "server_added", "Servidor cadastrado", _server(sid))
     return public(_server(sid))
 
@@ -165,10 +197,11 @@ def add_server(b: ServerIn):
 def edit_server(sid: int, b: ServerIn):
     old = _server(sid)
     _validate(b)
+    sp, su, se = _ssh_fields(b, old)
     db.x("UPDATE servers SET name=?,base_url=?,auth_type=?,credentials_enc=?,verify_tls=?,adapter=?,tags=?,enabled=?,"
-         "auto_restart=?,version=NULL WHERE id=?",
+         "auto_restart=?,version=NULL,ssh_port=?,ssh_user=?,ssh_pass_enc=? WHERE id=?",
          (b.name, b.base_url.rstrip("/"), b.auth_type, _creds(b, old), int(b.verify_tls), b.adapter, json.dumps(b.tags),
-          int(b.enabled), int(b.auto_restart), sid))
+          int(b.enabled), int(b.auto_restart), sp, su, se, sid))
     return public(_server(sid))
 
 
@@ -198,9 +231,70 @@ async def test_server(sid: int):
         return {"ok": False, "error": str(e)}
 
 
+# SSH ----------------------------------------------------------------------------
+class SSHDefaultIn(BaseModel):
+    port: Optional[int] = None
+    user: Optional[str] = None
+    password: Optional[str] = None      # vazio/omitido = manter
+    clear: bool = False                 # True = apagar usuário, senha e porta padrão
+
+
+def _ssh_default_public():
+    d = sshm.get_default(db)
+    return {"port": d["port"], "user": d["user"], "has_password": bool(d["password_enc"])}
+
+
+@api.get("/ssh-padrao")
+def ssh_default_get():
+    return _ssh_default_public()
+
+
+@api.put("/ssh-padrao")
+def ssh_default_put(b: SSHDefaultIn):
+    if b.port is not None and not 1 <= b.port <= 65535:
+        raise HTTPException(422, "porta SSH inválida (1 a 65535)")
+    sshm.set_default(db, b.port, b.user, b.password, b.clear)
+    return _ssh_default_public()
+
+
+async def _ssh_do(sid: int, kind: str, cmd: str, texto: str):
+    s = _server(sid)
+    try:
+        host, port, user, pw = sshm.resolve(s, sshm.get_default(db))
+    except sshm.SSHError as e:
+        raise HTTPException(422, str(e))
+    try:
+        code = await sshm.run(host, port, user, pw, cmd) if cmd else await sshm.run(host, port, user, pw, "true")
+    except sshm.SSHError as e:
+        db.add_event("warning", "ssh_error", f"SSH falhou ({texto}): {e}", s, None, {"user": user, "port": port})
+        return {"ok": False, "error": str(e)}
+    if code not in (0, None):
+        msg = f"o servidor respondeu com código {code}"
+        db.add_event("warning", "ssh_error", f"SSH falhou ({texto}): {msg}", s, None, {"user": user, "port": port})
+        return {"ok": False, "error": msg}
+    if kind != "ssh_test":
+        db.add_event("warning", kind, f"{texto} via SSH (usuário {user}, porta {port})", s, None, {"user": user, "port": port})
+    return {"ok": True}
+
+
+@api.post("/servers/{sid}/ssh/test")
+async def ssh_test(sid: int):
+    return await _ssh_do(sid, "ssh_test", "", "teste de conexão")
+
+
+@api.post("/servers/{sid}/ssh/restart-service")
+async def ssh_restart_service(sid: int):
+    return await _ssh_do(sid, "ssh_restart_service", sshm.CMD_SERVICE, "Serviço Flussonic reiniciado")
+
+
+@api.post("/servers/{sid}/ssh/reboot")
+async def ssh_reboot(sid: int):
+    return await _ssh_do(sid, "ssh_reboot", sshm.CMD_REBOOT, "Reinício do servidor solicitado")
+
+
 @api.get("/overview")
 def overview(server_id: Optional[int] = None, state: Optional[str] = None, only_problems: bool = False):
-    out = []
+    out, dflt = [], sshm.get_default(db)
     for s in db.q("SELECT * FROM servers ORDER BY name"):
         if server_id and s["id"] != server_id:
             continue
@@ -216,7 +310,7 @@ def overview(server_id: Optional[int] = None, state: Optional[str] = None, only_
             rows = [r for r in rows if (r["status"] or "") == state]
         if only_problems:
             rows = [r for r in rows if r["problem"]]
-        out.append({**public(s), "streams": rows})
+        out.append({**public(s, dflt), "streams": rows})
     return out
 
 
